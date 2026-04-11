@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from policy.actor import Actor
 from simulation import sim_main
 from simulation.line_sim.sim import LineSimulation
-from simulation.reward import TraceReward
+from simulation.rewards import TraceReward
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]

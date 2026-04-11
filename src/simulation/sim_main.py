@@ -18,7 +18,7 @@ import jax.numpy as jnp
 from policy.actor import Actor
 from policy.function_provider import FunctionProvider
 from simulation.base import Plotter, Simulation
-from simulation.reward import TraceReward
+from simulation.rewards import TraceReward
 from simulation.line_sim.encoding import LineActorEncoder
 from simulation.line_sim.plotter import LinePlotter
 from simulation.line_sim.sim import LineSimulation

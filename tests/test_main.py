@@ -14,7 +14,7 @@ from simulation.line_sim.encoding import (
 from simulation.line_sim.plotter import LinePlotter
 from simulation.line_sim.sim import LineSimulation
 from simulation.data_structures import EpisodeResult
-from simulation.reward import TraceReward
+from simulation.rewards import TraceReward
 from tests.fakes import (
     FakePlotter,
     FakeSimulation,

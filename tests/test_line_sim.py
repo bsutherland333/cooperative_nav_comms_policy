@@ -7,7 +7,7 @@ from policy.actor import Actor
 from simulation.data_structures import LocalBelief
 from simulation.line_sim.encoding import LineActorEncoder
 from simulation.line_sim.sim import LineSimulation
-from simulation.reward import TraceReward
+from simulation.rewards import TraceReward
 from tests.fakes import FixedOutputProvider
 
 

@@ -5,7 +5,7 @@ import numpy as np
 from policy.actions import selection_to_partner
 from policy.actor import Actor, ActorDecision
 from simulation.base import Simulation
-from simulation.reward import RewardFunction
+from simulation.rewards import RewardFunction
 from simulation.data_structures import EpisodeResult, LocalBelief, SimulationStep
 from simulation.line_sim.fg import FG
 

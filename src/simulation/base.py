@@ -5,7 +5,7 @@ from pathlib import Path
 
 from policy.actor import Actor
 from simulation.data_structures import EpisodeResult
-from simulation.reward import RewardFunction
+from simulation.rewards import RewardFunction
 
 
 class Simulation(ABC):

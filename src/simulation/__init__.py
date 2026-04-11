@@ -6,7 +6,7 @@ from simulation.data_structures import (
     LocalBelief,
     SimulationStep,
 )
-from simulation.reward import RewardFunction, TraceReward
+from simulation.rewards import RewardFunction, TraceReward
 
 __all__ = [
     "EpisodeResult",

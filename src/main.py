@@ -11,7 +11,7 @@ from policy.function_provider import FunctionProvider
 from policy.polynomial_function_provider import PolynomialFunctionProvider
 from policy.state_encoding import ActorEncoder, CriticEncoder
 from simulation.base import Plotter
-from simulation.reward import RewardFunction, TraceReward
+from simulation.rewards import RewardFunction, TraceReward
 from simulation.line_sim.encoding import (
     LineActorEncoder,
     LineCriticEncoder,

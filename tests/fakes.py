@@ -9,7 +9,7 @@ from policy.actor import Actor
 from policy.function_provider import FunctionProvider
 from policy.state_encoding import ActorEncoder, CriticEncoder
 from simulation.base import Plotter, Simulation
-from simulation.reward import RewardFunction
+from simulation.rewards import RewardFunction
 from simulation.data_structures import EpisodeResult
 
 
