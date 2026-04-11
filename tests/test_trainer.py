@@ -6,12 +6,17 @@ import pytest
 from policy.actor import Actor
 from policy.critic import Critic
 from training.trainer import Trainer
-from tests.fakes import FakeSimulation, FixedOutputProvider
+from tests.fakes import FakeSimulation, FixedOutputProvider, IdentityStateEncoder
 
 
 def _actor() -> Actor:
     provider = FixedOutputProvider(input_size=2, output=jnp.array([0.0, 1.0]))
-    return Actor(state_size=2, action_size=2, function_provider=provider)
+    return Actor(
+        state_size=2,
+        action_size=2,
+        function_provider=provider,
+        state_encoder=IdentityStateEncoder(),
+    )
 
 
 def _critic() -> Critic:
@@ -20,6 +25,7 @@ def _critic() -> Critic:
 
 
 def _trainer() -> Trainer:
+    FakeSimulation.instances = []
     return Trainer(
         actor=_actor(),
         critic=_critic(),
@@ -30,11 +36,9 @@ def _trainer() -> Trainer:
 def test_training_episode_uses_exploration() -> None:
     trainer = _trainer()
 
-    episode = trainer.collect_training_episode(random_seed=3)
+    episode = trainer.collect_training_episode()
 
     assert episode.metadata == {
-        "seed": 3,
-        "plot_results": False,
         "exploration": True,
     }
 
@@ -42,18 +46,25 @@ def test_training_episode_uses_exploration() -> None:
 def test_evaluation_episode_disables_exploration() -> None:
     trainer = _trainer()
 
-    episode = trainer.collect_evaluation_episode(random_seed=11, plot_results=True)
+    episode = trainer.collect_evaluation_episode()
 
     assert episode.metadata == {
-        "seed": 11,
-        "plot_results": True,
         "exploration": False,
     }
 
 
+def test_evaluation_episode_does_not_plot() -> None:
+    trainer = _trainer()
+
+    trainer.collect_evaluation_episode()
+
+    simulation = FakeSimulation.instances[0]
+    assert simulation.plot_calls == []
+
+
 def test_trainer_update_is_intentionally_unimplemented() -> None:
     trainer = _trainer()
-    episode = trainer.collect_training_episode(random_seed=1)
+    episode = trainer.collect_training_episode()
 
     with pytest.raises(NotImplementedError, match="not implemented yet"):
         trainer.update_from_episode(episode)

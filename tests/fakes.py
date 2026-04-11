@@ -1,12 +1,14 @@
 """Small fake implementations used by scaffold tests."""
 
-from typing import Any
+from pathlib import Path
+from typing import Any, Sequence
 
 import jax.numpy as jnp
 
 from policy.actor import Actor
 from policy.function_provider import FunctionProvider
-from simulation.base import Simulation
+from policy.state_encoding import StateEncoder
+from simulation.base import Plotter, Simulation
 from simulation.results import EpisodeResult
 
 
@@ -28,21 +30,75 @@ class FixedOutputProvider(FunctionProvider):
         }
 
 
+class IdentityStateEncoder(StateEncoder):
+    """State encoder that treats the local belief as an already encoded vector."""
+
+    def encode_actor_state(self, local_belief: Any, agent_id: int) -> jnp.ndarray:
+        del agent_id
+        return jnp.asarray(local_belief)
+
+    def encode_critic_state(self, local_beliefs: Sequence[Any]) -> jnp.ndarray:
+        return jnp.concatenate(tuple(jnp.asarray(belief) for belief in local_beliefs))
+
+
 class FakeSimulation(Simulation):
-    """Simulation that returns a seed-dependent empty episode."""
+    """Simulation that returns an empty episode with its exploration mode."""
 
     actor_input_size = 2
     critic_input_size = 6
+    instances: list["FakeSimulation"] = []
 
-    def __init__(self, random_seed: int, actor: Actor) -> None:
-        super().__init__(random_seed=random_seed, actor=actor)
+    def __init__(self, actor: Actor) -> None:
+        super().__init__(actor=actor)
+        self.plot_calls: list[dict[str, Any]] = []
+        self.instances.append(self)
 
-    def run(self, plot_results: bool, exploration: bool) -> EpisodeResult:
+    def run(self, exploration: bool) -> EpisodeResult:
         return EpisodeResult(
             steps=(),
             metadata={
-                "seed": self.random_seed,
-                "plot_results": plot_results,
                 "exploration": exploration,
             },
+        )
+
+    def plot(
+        self,
+        episode: EpisodeResult,
+        n_sigma: float,
+        output_path: str | Path | None,
+        show: bool,
+    ) -> None:
+        self.plot_calls.append(
+            {
+                "episode": episode,
+                "n_sigma": n_sigma,
+                "output_path": output_path,
+                "show": show,
+            }
+        )
+
+
+class FakePlotter(Plotter):
+    """Plotter that records plot requests."""
+
+    instances: list["FakePlotter"] = []
+
+    def __init__(self) -> None:
+        self.plot_calls: list[dict[str, Any]] = []
+        self.instances.append(self)
+
+    def plot(
+        self,
+        episode: EpisodeResult,
+        n_sigma: float,
+        output_path: str | Path | None,
+        show: bool,
+    ) -> None:
+        self.plot_calls.append(
+            {
+                "episode": episode,
+                "n_sigma": n_sigma,
+                "output_path": output_path,
+                "show": show,
+            }
         )

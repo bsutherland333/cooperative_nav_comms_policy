@@ -9,6 +9,7 @@ description = "Cooperative navigation simulation with actor-critic method of lea
 readme = "AGENTS.md"
 requires-python = ">=3.11"
 dependencies = [
+    "gtsam",
     "jax",
     "matplotlib",
     "numpy",

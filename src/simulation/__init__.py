@@ -1,6 +1,6 @@
 """Simulation contracts and result containers."""
 
-from simulation.base import Simulation
+from simulation.base import Plotter, Simulation
 from simulation.results import (
     EpisodeResult,
     SimulationStep,
@@ -8,6 +8,7 @@ from simulation.results import (
 
 __all__ = [
     "EpisodeResult",
+    "Plotter",
     "Simulation",
     "SimulationStep",
 ]

@@ -6,7 +6,12 @@ import jax.numpy as jnp
 
 import main
 from simulation.results import EpisodeResult
-from tests.fakes import FakeSimulation, FixedOutputProvider
+from tests.fakes import (
+    FakePlotter,
+    FakeSimulation,
+    FixedOutputProvider,
+    IdentityStateEncoder,
+)
 
 
 class RecordingTrainer:
@@ -16,25 +21,21 @@ class RecordingTrainer:
 
     def __init__(self, **kwargs: Any) -> None:
         self.kwargs = kwargs
-        self.training_seeds: list[int] = []
-        self.evaluation_calls: list[tuple[int, bool]] = []
+        self.training_episode_count = 0
+        self.evaluation_episode_count = 0
         self.update_count = 0
         self.instances.append(self)
 
-    def collect_training_episode(self, random_seed: int) -> EpisodeResult:
-        self.training_seeds.append(random_seed)
-        return EpisodeResult(steps=(), metadata={"seed": random_seed})
+    def collect_training_episode(self) -> EpisodeResult:
+        self.training_episode_count += 1
+        return EpisodeResult(steps=(), metadata={})
 
     def update_from_episode(self, episode: EpisodeResult) -> None:
         self.update_count += 1
 
-    def collect_evaluation_episode(
-        self,
-        random_seed: int,
-        plot_results: bool,
-    ) -> EpisodeResult:
-        self.evaluation_calls.append((random_seed, plot_results))
-        return EpisodeResult(steps=(), metadata={"seed": random_seed})
+    def collect_evaluation_episode(self) -> EpisodeResult:
+        self.evaluation_episode_count += 1
+        return EpisodeResult(steps=(), metadata={})
 
 
 def test_main_fails_cleanly_when_simulator_is_unregistered(capsys: Any) -> None:
@@ -47,13 +48,14 @@ def test_main_fails_cleanly_when_simulator_is_unregistered(capsys: Any) -> None:
 
 def test_run_training_orchestrates_training_and_evaluation(monkeypatch: Any) -> None:
     RecordingTrainer.instances = []
+    FakePlotter.instances = []
+    FakeSimulation.instances = []
     config = main.RunConfig(
         simulator_name="fake",
         function_type="fake_function",
         num_agents=3,
         num_training_iterations=3,
         evaluation_interval=2,
-        random_seed=10,
     )
 
     monkeypatch.setattr(
@@ -61,31 +63,23 @@ def test_run_training_orchestrates_training_and_evaluation(monkeypatch: Any) -> 
         "build_function_provider",
         _fake_function_provider,
     )
+    monkeypatch.setattr(main, "build_state_encoder", lambda config: IdentityStateEncoder())
     monkeypatch.setattr(main, "build_simulation_type", lambda config: FakeSimulation)
+    monkeypatch.setattr(main, "build_plotter", lambda config: FakePlotter())
     monkeypatch.setattr(main, "Trainer", RecordingTrainer)
 
     main.run_training(config)
 
     trainer = RecordingTrainer.instances[0]
-    assert trainer.training_seeds == [10, 11, 12]
-    assert trainer.evaluation_calls == [(1_000_011, False), (2_000_010, True)]
+    assert trainer.training_episode_count == 3
+    assert trainer.evaluation_episode_count == 1
     assert trainer.update_count == 3
     assert trainer.kwargs["simulation_type"] is FakeSimulation
 
-
-def test_seed_helpers_are_deterministic() -> None:
-    config = main.RunConfig(
-        simulator_name="fake",
-        function_type="fake_function",
-        num_agents=3,
-        num_training_iterations=1,
-        evaluation_interval=1,
-        random_seed=7,
-    )
-
-    assert main.training_seed(config, iteration_index=2) == 9
-    assert main.evaluation_seed(config, iteration_index=2) == 1_000_009
-    assert main.final_evaluation_seed(config) == 2_000_007
+    final_plotter = FakePlotter.instances[0]
+    assert final_plotter.plot_calls[0]["n_sigma"] == 2.0
+    assert final_plotter.plot_calls[0]["output_path"] is None
+    assert final_plotter.plot_calls[0]["show"] is True
 
 
 def test_function_type_cli_arg_is_parsed() -> None:

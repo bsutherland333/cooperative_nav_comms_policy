@@ -5,8 +5,10 @@ from typing import Any
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from policy.function_provider import FunctionProvider
+from policy.state_encoding import StateEncoder
 
 
 @dataclass(frozen=True)
@@ -26,6 +28,7 @@ class Actor:
         state_size: int,
         action_size: int,
         function_provider: FunctionProvider,
+        state_encoder: StateEncoder,
     ) -> None:
         """Validate and store the actor's function provider."""
         if state_size <= 0:
@@ -40,15 +43,24 @@ class Actor:
         self.state_size = state_size
         self.action_size = action_size
         self.function_provider = function_provider
+        self.state_encoder = state_encoder
+        self._rng_key = jax.random.PRNGKey(
+            int(np.random.default_rng().integers(0, np.iinfo(np.uint32).max))
+        )
 
     def get_action(
         self,
-        current_state: jnp.ndarray,
+        local_belief: Any,
+        agent_id: int,
         exploration: bool,
-        rng_key: Any,
     ) -> ActorDecision:
         """Choose an action by sampling during training or argmax during evaluation."""
-        state = jnp.asarray(current_state)
+        state = jnp.asarray(
+            self.state_encoder.encode_actor_state(
+                local_belief=local_belief,
+                agent_id=agent_id,
+            )
+        )
         if state.shape != (self.state_size,):
             raise ValueError("Actor state must be a flat vector of length state_size.")
 
@@ -59,7 +71,8 @@ class Actor:
         probabilities = jax.nn.softmax(logits)
 
         if exploration:
-            selection = int(jax.random.categorical(rng_key, logits))
+            self._rng_key, action_key = jax.random.split(self._rng_key)
+            selection = int(jax.random.categorical(action_key, logits))
         else:
             selection = int(jnp.argmax(probabilities))
 

@@ -8,6 +8,8 @@ import sys
 from policy.actor import Actor
 from policy.critic import Critic
 from policy.function_provider import FunctionProvider
+from policy.state_encoding import StateEncoder
+from simulation.base import Plotter
 from training.trainer import SimulationType, Trainer
 
 
@@ -20,7 +22,6 @@ class RunConfig:
     num_agents: int
     num_training_iterations: int
     evaluation_interval: int
-    random_seed: int
 
 
 def parse_args(argv: Sequence[str] | None) -> RunConfig:
@@ -33,7 +34,6 @@ def parse_args(argv: Sequence[str] | None) -> RunConfig:
     parser.add_argument("--num-agents", default=3, type=_positive_int)
     parser.add_argument("--num-training-iterations", default=1, type=_positive_int)
     parser.add_argument("--evaluation-interval", default=1, type=_nonnegative_int)
-    parser.add_argument("--random-seed", default=0, type=int)
     args = parser.parse_args(argv)
 
     return RunConfig(
@@ -42,7 +42,6 @@ def parse_args(argv: Sequence[str] | None) -> RunConfig:
         num_agents=args.num_agents,
         num_training_iterations=args.num_training_iterations,
         evaluation_interval=args.evaluation_interval,
-        random_seed=args.random_seed,
     )
 
 
@@ -70,25 +69,26 @@ def run_training(config: RunConfig) -> None:
         simulation_type=simulation_type,
     )
     for iteration_index in range(config.num_training_iterations):
-        training_episode = trainer.collect_training_episode(
-            random_seed=training_seed(config, iteration_index)
-        )
+        training_episode = trainer.collect_training_episode()
         trainer.update_from_episode(training_episode)
 
         if should_evaluate(config, iteration_index):
-            trainer.collect_evaluation_episode(
-                random_seed=evaluation_seed(config, iteration_index),
-                plot_results=False,
-            )
+            trainer.collect_evaluation_episode()
 
-    trainer.collect_evaluation_episode(
-        random_seed=final_evaluation_seed(config),
-        plot_results=True,
+    final_simulation = simulation_type(actor)
+    final_episode = final_simulation.run(exploration=False)
+    final_plotter = build_plotter(config)
+    final_plotter.plot(
+        episode=final_episode,
+        n_sigma=2.0,
+        output_path=None,
+        show=True,
     )
 
 
 def build_actor(config: RunConfig) -> Actor:
     """Construct the shared actor policy."""
+    state_encoder = build_state_encoder(config)
     provider = build_function_provider(
         config=config,
         role="actor",
@@ -98,6 +98,7 @@ def build_actor(config: RunConfig) -> Actor:
         state_size=provider.input_size,
         action_size=config.num_agents,
         function_provider=provider,
+        state_encoder=state_encoder,
     )
 
 
@@ -126,6 +127,13 @@ def build_function_provider(
     )
 
 
+def build_state_encoder(config: RunConfig) -> StateEncoder:
+    """Create the concrete state encoder for the selected simulator."""
+    raise NotImplementedError(
+        f"No StateEncoder is registered for simulator '{config.simulator_name}'."
+    )
+
+
 def build_simulation_type(config: RunConfig) -> SimulationType:
     """Select the concrete simulator class."""
     raise NotImplementedError(
@@ -133,19 +141,11 @@ def build_simulation_type(config: RunConfig) -> SimulationType:
     )
 
 
-def training_seed(config: RunConfig, iteration_index: int) -> int:
-    """Return the deterministic seed for one training iteration."""
-    return config.random_seed + iteration_index
-
-
-def evaluation_seed(config: RunConfig, iteration_index: int) -> int:
-    """Return the deterministic seed for one evaluation episode."""
-    return config.random_seed + 1_000_000 + iteration_index
-
-
-def final_evaluation_seed(config: RunConfig) -> int:
-    """Return the deterministic seed for the final plotted evaluation episode."""
-    return config.random_seed + 2_000_000
+def build_plotter(config: RunConfig) -> Plotter:
+    """Create the concrete plotter for the selected simulator."""
+    raise NotImplementedError(
+        f"No plotter is registered for simulator '{config.simulator_name}'."
+    )
 
 
 def should_evaluate(config: RunConfig, iteration_index: int) -> bool:

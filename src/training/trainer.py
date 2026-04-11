@@ -22,23 +22,15 @@ class Trainer:
         self.critic = critic
         self.simulation_type = simulation_type
 
-    def collect_training_episode(self, random_seed: int) -> EpisodeResult:
+    def collect_training_episode(self) -> EpisodeResult:
         """Run one training episode."""
         return self._run_episode(
-            random_seed=random_seed,
-            plot_results=False,
             exploration=True,
         )
 
-    def collect_evaluation_episode(
-        self,
-        random_seed: int,
-        plot_results: bool,
-    ) -> EpisodeResult:
+    def collect_evaluation_episode(self) -> EpisodeResult:
         """Run one evaluation episode."""
         return self._run_episode(
-            random_seed=random_seed,
-            plot_results=plot_results,
             exploration=False,
         )
 
@@ -50,10 +42,8 @@ class Trainer:
 
     def _run_episode(
         self,
-        random_seed: int,
-        plot_results: bool,
         exploration: bool,
     ) -> EpisodeResult:
         """Build and run one simulator instance."""
-        simulation = self.simulation_type(random_seed, self.actor)
-        return simulation.run(plot_results=plot_results, exploration=exploration)
+        simulation = self.simulation_type(self.actor)
+        return simulation.run(exploration=exploration)
