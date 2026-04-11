@@ -41,11 +41,11 @@ class FixedLogitProvider(FunctionProvider):
 
     def __init__(self, input_size: int, logits: jnp.ndarray) -> None:
         super().__init__(input_size=input_size, output_size=int(logits.shape[0]))
-        self.logits = jnp.asarray(logits)
+        self.parameters = {"logits": jnp.asarray(logits)}
 
-    def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
+    def _apply(self, parameters: Any, inputs: jnp.ndarray) -> jnp.ndarray:
         del inputs
-        return self.logits
+        return parameters["logits"]
 
     def update(self, gradient: Any, learning_rate: float) -> None:
         del gradient, learning_rate

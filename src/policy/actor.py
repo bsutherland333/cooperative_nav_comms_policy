@@ -16,7 +16,6 @@ class ActorDecision:
     """Actor output for one local state query."""
 
     selection: int
-    logits: jnp.ndarray
     probabilities: jnp.ndarray
 
 
@@ -78,7 +77,6 @@ class Actor:
 
         return ActorDecision(
             selection=selection,
-            logits=logits,
             probabilities=probabilities,
         )
 

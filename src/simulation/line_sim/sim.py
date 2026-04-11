@@ -138,10 +138,6 @@ class LineSimulation(Simulation):
                             np.array(decision.probabilities, dtype=float, copy=True)
                             for decision in decisions
                         ),
-                        "actor_logits": tuple(
-                            np.array(decision.logits, dtype=float, copy=True)
-                            for decision in decisions
-                        ),
                     },
                 )
             )

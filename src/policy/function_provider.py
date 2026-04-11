@@ -19,9 +19,13 @@ class FunctionProvider(ABC):
         self.input_size = input_size
         self.output_size = output_size
 
-    @abstractmethod
     def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
         """Evaluate the parameterized function."""
+        return self._apply(self.parameters, inputs)
+
+    @abstractmethod
+    def _apply(self, parameters: Any, inputs: jnp.ndarray) -> jnp.ndarray:
+        """Evaluate the function with explicit parameters."""
 
     @abstractmethod
     def update(self, gradient: Any, learning_rate: float) -> None:

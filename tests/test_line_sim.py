@@ -40,6 +40,7 @@ def test_line_sim_uses_noisy_truth_and_nominal_priors() -> None:
     assert isinstance(episode.metadata["prior_local_belief"][0], LineLocalBelief)
     assert episode.metadata["initial_position_scalar"] == sim.initial_position_scalar
     assert isinstance(episode.steps[0].extra["actor_probabilities"][0], np.ndarray)
+    assert "actor_logits" not in episode.steps[0].extra
     assert true_trajectory.shape == (2, 3)
     assert not np.allclose(true_trajectory[0], nominal_positions)
     np.testing.assert_allclose(

@@ -20,9 +20,9 @@ class FixedOutputProvider(FunctionProvider):
         super().__init__(input_size=input_size, output_size=int(output.shape[0]))
         self.parameters = {"output": jnp.asarray(output)}
 
-    def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
+    def _apply(self, parameters: Any, inputs: jnp.ndarray) -> jnp.ndarray:
         self.last_inputs = inputs
-        return self.parameters["output"]
+        return parameters["output"]
 
     def update(self, gradient: Any, learning_rate: float) -> None:
         self.parameters = {

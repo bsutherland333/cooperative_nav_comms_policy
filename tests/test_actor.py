@@ -1,10 +1,19 @@
 """Tests for the shared stochastic actor."""
 
+from dataclasses import fields
+
 import jax
 import jax.numpy as jnp
 
-from policy.actor import Actor
+from policy.actor import Actor, ActorDecision
 from tests.fakes import FixedOutputProvider, IdentityStateEncoder
+
+
+def test_actor_decision_exposes_selection_and_probabilities() -> None:
+    assert {field.name for field in fields(ActorDecision)} == {
+        "selection",
+        "probabilities",
+    }
 
 
 def test_actor_decision_includes_softmax_distribution() -> None:
@@ -47,7 +56,7 @@ def test_actor_evaluation_selects_argmax_action() -> None:
     assert decision.selection == 1
 
 
-def test_actor_exploration_samples_from_logits() -> None:
+def test_actor_exploration_samples_from_provider_scores() -> None:
     provider = FixedOutputProvider(
         input_size=2,
         output=jnp.array([-1_000_000.0, 1_000_000.0, -1_000_000.0]),

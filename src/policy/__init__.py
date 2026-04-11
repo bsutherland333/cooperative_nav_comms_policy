@@ -8,6 +8,7 @@ from policy.actions import (
 from policy.actor import Actor, ActorDecision
 from policy.critic import Critic
 from policy.function_provider import FunctionProvider
+from policy.polynomial_function_provider import PolynomialFunctionProvider
 from policy.state_encoding import StateEncoder
 
 __all__ = [
@@ -16,6 +17,7 @@ __all__ = [
     "Critic",
     "FunctionProvider",
     "NO_COMMUNICATION",
+    "PolynomialFunctionProvider",
     "StateEncoder",
     "partner_to_selection",
     "selection_to_partner",
