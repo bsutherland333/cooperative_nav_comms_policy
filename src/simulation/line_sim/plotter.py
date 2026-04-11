@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from simulation.base import Plotter
-from simulation.results import EpisodeResult
+from simulation.data_structures import EpisodeResult
 
 
 class LinePlotter(Plotter):
@@ -108,11 +108,11 @@ def _plot_range_measurements(
 
         for first_agent_id, second_agent_id in step.communication_events:
             first_estimate, _ = _self_belief_values(
-                step.local_belief[first_agent_id],
+                step.updated_local_beliefs[first_agent_id],
                 first_agent_id,
             )
             second_estimate, _ = _self_belief_values(
-                step.local_belief[second_agent_id],
+                step.updated_local_beliefs[second_agent_id],
                 second_agent_id,
             )
             axis.plot(
@@ -157,7 +157,7 @@ def _self_belief_series(
     for step in episode.steps:
         times.append(step.timestep)
         estimate, variance = _self_belief_values(
-            step.local_belief[agent_id],
+            step.updated_local_beliefs[agent_id],
             agent_id,
         )
         estimates.append(estimate)

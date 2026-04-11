@@ -26,7 +26,7 @@ class PolynomialFunctionProvider(FunctionProvider):
             "weights": jnp.zeros((self.num_features, output_size)),
         }
 
-    def _apply(self, parameters: Any, inputs: jnp.ndarray) -> jnp.ndarray:
+    def apply(self, parameters: Any, inputs: jnp.ndarray) -> jnp.ndarray:
         """Evaluate the polynomial with explicit JAX parameters."""
         features = self._features(inputs)
         return features @ parameters["weights"]

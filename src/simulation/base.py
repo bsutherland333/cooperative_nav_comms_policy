@@ -4,19 +4,47 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 from policy.actor import Actor
-from simulation.results import EpisodeResult
+from simulation.data_structures import EpisodeResult
+from simulation.reward import RewardFunction
 
 
 class Simulation(ABC):
-    """Interface for a single concrete cooperative-localization simulator."""
+    """Base class for one concrete cooperative-localization episode runner.
 
-    def __init__(self, actor: Actor) -> None:
-        """Store simulator dependencies shared by future concrete simulations."""
+    Concrete simulators may require additional environment-specific arguments,
+    but trainer-bound simulation types must be preconfigured so they can be
+    constructed with a single shared Actor.
+    """
+
+    def __init__(
+        self,
+        actor: Actor,
+        num_agents: int,
+        num_steps: int,
+        reward_function: RewardFunction,
+    ) -> None:
+        """Store dimensions and actor used by cooperative simulators."""
+        if num_agents < 2:
+            raise ValueError("At least two agents are required.")
+        if num_steps <= 0:
+            raise ValueError("num_steps must be positive.")
+        if actor.action_size != num_agents:
+            raise ValueError("Actor action_size must match num_agents.")
+
         self.actor = actor
+        self.num_agents = num_agents
+        self.num_steps = num_steps
+        self.reward_function = reward_function
 
     @abstractmethod
     def run(self, exploration: bool) -> EpisodeResult:
-        """Run one episode and return the complete episode result."""
+        """Run one episode and return the training/evaluation rollout.
+
+        Implementations should sample actions from decision-time local beliefs,
+        store those beliefs in each SimulationStep, and compute scalar rewards
+        with the configured reward function. When exploration is false, actors
+        should be queried in evaluation mode.
+        """
 
 
 class Plotter(ABC):

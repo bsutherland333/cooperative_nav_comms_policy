@@ -21,10 +21,10 @@ class FunctionProvider(ABC):
 
     def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
         """Evaluate the parameterized function."""
-        return self._apply(self.parameters, inputs)
+        return self.apply(self.parameters, inputs)
 
     @abstractmethod
-    def _apply(self, parameters: Any, inputs: jnp.ndarray) -> jnp.ndarray:
+    def apply(self, parameters: Any, inputs: jnp.ndarray) -> jnp.ndarray:
         """Evaluate the function with explicit parameters."""
 
     @abstractmethod

@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from policy.actor import Actor
 from simulation import sim_main
 from simulation.line_sim.sim import LineSimulation
+from simulation.reward import TraceReward
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -19,13 +20,34 @@ def test_sim_main_parses_line_defaults() -> None:
     config = sim_main.parse_args([])
 
     assert config.simulator_name == "line"
+    assert config.reward_function_name == "trace"
     assert config.num_agents == 3
     assert config.num_steps == 25
+
+
+def test_sim_main_parses_reward_function() -> None:
+    config = sim_main.parse_args(["--reward-function", "custom_reward"])
+
+    assert config.reward_function_name == "custom_reward"
+
+
+def test_sim_main_reward_function_registration_is_not_simulator_specific() -> None:
+    config = sim_main.StandaloneSimConfig(
+        simulator_name="future_sim",
+        reward_function_name="trace",
+        num_agents=2,
+        num_steps=1,
+    )
+
+    reward_function = sim_main.build_reward_function(config)
+
+    assert isinstance(reward_function, TraceReward)
 
 
 def test_sim_main_builds_line_simulation() -> None:
     config = sim_main.StandaloneSimConfig(
         simulator_name="line",
+        reward_function_name="trace",
         num_agents=2,
         num_steps=1,
     )
@@ -35,6 +57,7 @@ def test_sim_main_builds_line_simulation() -> None:
 
     assert isinstance(actor, Actor)
     assert isinstance(simulation, LineSimulation)
+    assert isinstance(simulation.reward_function, TraceReward)
 
 
 def test_sim_main_fails_cleanly_for_unknown_simulator(capsys: object) -> None:
@@ -43,6 +66,14 @@ def test_sim_main_fails_cleanly_for_unknown_simulator(capsys: object) -> None:
     captured = capsys.readouterr()
     assert exit_code == 1
     assert "No standalone simulator is registered" in captured.err
+
+
+def test_sim_main_fails_cleanly_for_unknown_reward_function(capsys: object) -> None:
+    exit_code = sim_main.main(["--reward-function", "missing"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "No standalone reward function 'missing' is registered" in captured.err
 
 
 def test_sim_main_runs_as_direct_script() -> None:
@@ -77,6 +108,7 @@ def test_run_standalone_sim_shows_plot_without_saving(
     monkeypatch.setattr(plt, "show", lambda: show_calls.append(True))
     config = sim_main.StandaloneSimConfig(
         simulator_name="line",
+        reward_function_name="trace",
         num_agents=2,
         num_steps=1,
     )

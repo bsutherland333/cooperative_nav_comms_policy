@@ -9,8 +9,7 @@ import matplotlib.pyplot as plt
 import pytest
 
 from simulation.line_sim.plotter import LinePlotter
-from simulation.line_sim.sim import LineLocalBelief
-from simulation.results import EpisodeResult, SimulationStep
+from simulation.data_structures import EpisodeResult, LocalBelief, SimulationStep
 
 
 def _episode() -> EpisodeResult:
@@ -22,25 +21,38 @@ def _episode_with_events(
 ) -> EpisodeResult:
     covariance = np.eye(2)
     prior_covariance = np.diag([4.0, 9.0])
+    updated_covariance = np.diag([0.25, 4.0])
     step = SimulationStep(
         timestep=1,
-        local_belief=(
-            LineLocalBelief(estimate=np.array([0.0, 1.0]), covariance=covariance),
-            LineLocalBelief(estimate=np.array([0.1, 1.1]), covariance=covariance),
+        decision_local_beliefs=(
+            LocalBelief(estimate=np.array([0.0, 1.0]), covariance=covariance),
+            LocalBelief(estimate=np.array([0.1, 1.1]), covariance=covariance),
+        ),
+        updated_local_beliefs=(
+            LocalBelief(
+                estimate=np.array([0.25, 1.25]),
+                covariance=updated_covariance,
+            ),
+            LocalBelief(
+                estimate=np.array([0.35, 1.35]),
+                covariance=updated_covariance,
+            ),
         ),
         action_vector=(0, 0),
         communication_events=communication_events,
+        reward=-1.0,
+        true_positions=np.array([0.2, 0.9]),
         extra={},
     )
     return EpisodeResult.from_steps(
         steps=(step,),
         metadata={
             "prior_local_belief": (
-                LineLocalBelief(
+                LocalBelief(
                     estimate=np.array([0.0, 1.0]),
                     covariance=prior_covariance,
                 ),
-                LineLocalBelief(
+                LocalBelief(
                     estimate=np.array([0.0, 1.0]),
                     covariance=prior_covariance,
                 ),
@@ -82,11 +94,13 @@ def test_plotter_includes_prior_estimate_and_uncertainty(tmp_path: object) -> No
         line for line in axis.lines if line.get_label() == "agent 0 estimate"
     )
     np.testing.assert_allclose(estimate_line.get_xdata(), np.array([0, 1]))
-    np.testing.assert_allclose(estimate_line.get_ydata(), np.array([0.0, 0.0]))
+    np.testing.assert_allclose(estimate_line.get_ydata(), np.array([0.0, 0.25]))
     assert estimate_line.get_marker() == "None"
     uncertainty_vertices = axis.collections[0].get_paths()[0].vertices
     assert np.any(np.isclose(uncertainty_vertices[:, 1], -4.0))
     assert np.any(np.isclose(uncertainty_vertices[:, 1], 4.0))
+    assert np.any(np.isclose(uncertainty_vertices[:, 1], -0.75))
+    assert np.any(np.isclose(uncertainty_vertices[:, 1], 1.25))
     plt.close(figure)
 
 
@@ -104,7 +118,7 @@ def test_plotter_marks_range_measurements(tmp_path: object) -> None:
         line for line in axis.lines if line.get_label() == "range measurement"
     )
     np.testing.assert_allclose(measurement_line.get_xdata(), np.array([1, 1]))
-    np.testing.assert_allclose(measurement_line.get_ydata(), np.array([0.0, 1.1]))
+    np.testing.assert_allclose(measurement_line.get_ydata(), np.array([0.25, 1.35]))
     plt.close(figure)
 
 

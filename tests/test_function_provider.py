@@ -60,7 +60,7 @@ def test_polynomial_provider_evaluates_explicit_parameters() -> None:
         )
     }
 
-    output = provider._apply(parameters, jnp.array([2.0, 3.0]))
+    output = provider.apply(parameters, jnp.array([2.0, 3.0]))
 
     assert jnp.allclose(output, jnp.array([3.0, 30.0]))
 
@@ -79,7 +79,7 @@ def test_polynomial_provider_updates_owned_weights() -> None:
     )
 
 
-def test_polynomial_provider_is_jax_transformable_through_private_apply() -> None:
+def test_polynomial_provider_is_jax_transformable_through_apply() -> None:
     provider = PolynomialFunctionProvider(input_size=2, output_size=1, degree=2)
     parameters = {
         "weights": jnp.arange(provider.num_features, dtype=jnp.float32).reshape(-1, 1)
@@ -87,16 +87,16 @@ def test_polynomial_provider_is_jax_transformable_through_private_apply() -> Non
     inputs = jnp.array([2.0, 3.0])
 
     assert jnp.allclose(
-        jax.jit(provider._apply)(parameters, inputs),
-        provider._apply(parameters, inputs),
+        jax.jit(provider.apply)(parameters, inputs),
+        provider.apply(parameters, inputs),
     )
     assert jnp.allclose(
-        jax.grad(lambda weights: jnp.sum(provider._apply({"weights": weights}, inputs)))(
+        jax.grad(lambda weights: jnp.sum(provider.apply({"weights": weights}, inputs)))(
             parameters["weights"]
         ),
         provider._features(inputs)[:, jnp.newaxis],
     )
-    assert jax.vmap(lambda batched_inputs: provider._apply(parameters, batched_inputs))(
+    assert jax.vmap(lambda batched_inputs: provider.apply(parameters, batched_inputs))(
         jnp.array([[1.0, 2.0], [2.0, 3.0]])
     ).shape == (2, 1)
 

@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 
 from policy.actor import Actor, ActorDecision
-from tests.fakes import FixedOutputProvider, IdentityStateEncoder
+from tests.fakes import FixedOutputProvider, IdentityActorEncoder
 
 
 def test_actor_decision_exposes_selection_and_probabilities() -> None:
@@ -22,7 +22,7 @@ def test_actor_decision_includes_softmax_distribution() -> None:
         state_size=2,
         action_size=3,
         function_provider=provider,
-        state_encoder=IdentityStateEncoder(),
+        actor_encoder=IdentityActorEncoder(),
     )
 
     decision = actor.get_action(
@@ -44,7 +44,7 @@ def test_actor_evaluation_selects_argmax_action() -> None:
         state_size=2,
         action_size=3,
         function_provider=provider,
-        state_encoder=IdentityStateEncoder(),
+        actor_encoder=IdentityActorEncoder(),
     )
 
     decision = actor.get_action(
@@ -65,7 +65,7 @@ def test_actor_exploration_samples_from_provider_scores() -> None:
         state_size=2,
         action_size=3,
         function_provider=provider,
-        state_encoder=IdentityStateEncoder(),
+        actor_encoder=IdentityActorEncoder(),
     )
 
     decision = actor.get_action(
@@ -83,7 +83,7 @@ def test_actor_update_delegates_to_provider() -> None:
         state_size=2,
         action_size=3,
         function_provider=provider,
-        state_encoder=IdentityStateEncoder(),
+        actor_encoder=IdentityActorEncoder(),
     )
 
     actor.update(gradient={"output": jnp.array([0.5, -1.0, 2.0])}, learning_rate=0.1)

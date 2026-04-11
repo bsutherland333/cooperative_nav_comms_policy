@@ -1,12 +1,12 @@
 """Line random-walk simulator with decentralized GTSAM estimators."""
 
-from dataclasses import dataclass
 import numpy as np
 
 from policy.actions import selection_to_partner
 from policy.actor import Actor, ActorDecision
 from simulation.base import Simulation
-from simulation.results import EpisodeResult, SimulationStep
+from simulation.reward import RewardFunction
+from simulation.data_structures import EpisodeResult, LocalBelief, SimulationStep
 from simulation.line_sim.fg import FG
 
 
@@ -14,27 +14,6 @@ DEFAULT_PRIOR_STD = 0.1
 DEFAULT_PROPAGATION_STD = 0.1
 DEFAULT_RANGE_STD = 0.05
 DEFAULT_INITIAL_POSITION_SCALAR = 2.0
-
-
-@dataclass(frozen=True)
-class LineLocalBelief:
-    """Local estimator belief at one line-simulation timestep."""
-
-    estimate: np.ndarray
-    covariance: np.ndarray
-
-    def __post_init__(self) -> None:
-        """Validate the stored local fleet belief snapshot."""
-        estimate = np.array(self.estimate, dtype=float, copy=True)
-        covariance = np.array(self.covariance, dtype=float, copy=True)
-        if estimate.ndim != 1:
-            raise ValueError("Line local belief estimate must be a vector.")
-        if covariance.ndim != 2:
-            raise ValueError("Line local belief covariance must be a matrix.")
-        if covariance.shape != (estimate.shape[0], estimate.shape[0]):
-            raise ValueError("Line local belief covariance must match estimate size.")
-        object.__setattr__(self, "estimate", estimate)
-        object.__setattr__(self, "covariance", covariance)
 
 
 class LineSimulation(Simulation):
@@ -45,17 +24,15 @@ class LineSimulation(Simulation):
         actor: Actor,
         num_agents: int,
         num_steps: int,
+        reward_function: RewardFunction,
     ) -> None:
         """Store simulator parameters and random generators."""
-        if num_agents < 2:
-            raise ValueError("At least two agents are required.")
-        if num_steps <= 0:
-            raise ValueError("num_steps must be positive.")
-        if actor.action_size != num_agents:
-            raise ValueError("Actor action_size must match num_agents.")
-        super().__init__(actor=actor)
-        self.num_agents = num_agents
-        self.num_steps = num_steps
+        super().__init__(
+            actor=actor,
+            num_agents=num_agents,
+            num_steps=num_steps,
+            reward_function=reward_function,
+        )
         self.prior_std = DEFAULT_PRIOR_STD
         self.propagation_std = DEFAULT_PROPAGATION_STD
         self.range_std = DEFAULT_RANGE_STD
@@ -96,7 +73,11 @@ class LineSimulation(Simulation):
                 estimator.add_propagation_step(timestep)
                 estimator.optimize()
 
-            decisions = self._sample_actions(estimators, timestep, exploration)
+            decision_local_beliefs = _local_beliefs(estimators, timestep)
+            decisions = self._sample_actions(
+                decision_local_beliefs=decision_local_beliefs,
+                exploration=exploration,
+            )
             communication_events = self._communication_events(decisions)
             for agent_id, partner_id in communication_events:
                 first_estimator = estimators[agent_id]
@@ -126,19 +107,21 @@ class LineSimulation(Simulation):
                 second_estimator.optimize()
                 range_measurement_count += 1
 
+            updated_local_beliefs = _local_beliefs(estimators, timestep)
             steps.append(
                 SimulationStep(
                     timestep=timestep,
-                    local_belief=_local_beliefs(estimators, timestep),
+                    decision_local_beliefs=decision_local_beliefs,
+                    updated_local_beliefs=updated_local_beliefs,
                     action_vector=tuple(decision.selection for decision in decisions),
                     communication_events=communication_events,
-                    extra={
-                        "true_positions": true_positions.copy(),
-                        "actor_probabilities": tuple(
-                            np.array(decision.probabilities, dtype=float, copy=True)
-                            for decision in decisions
-                        ),
-                    },
+                    reward=self.reward_function(
+                        decision_local_beliefs=decision_local_beliefs,
+                        updated_local_beliefs=updated_local_beliefs,
+                        communication_events=communication_events,
+                    ),
+                    true_positions=true_positions.copy(),
+                    extra={},
                 )
             )
 
@@ -167,16 +150,15 @@ class LineSimulation(Simulation):
 
     def _sample_actions(
         self,
-        estimators: tuple[FG, ...],
-        timestep: int,
+        decision_local_beliefs: tuple[LocalBelief, ...],
         exploration: bool,
     ) -> tuple[ActorDecision, ...]:
         """Sample one communication action per local estimator."""
         decisions: list[ActorDecision] = []
-        for agent_id, estimator in enumerate(estimators):
+        for agent_id, local_belief in enumerate(decision_local_beliefs):
             decisions.append(
                 self.actor.get_action(
-                    local_belief=_local_belief(estimator, timestep),
+                    local_belief=local_belief,
                     agent_id=agent_id,
                     exploration=exploration,
                 )
@@ -206,12 +188,12 @@ class LineSimulation(Simulation):
 def _local_beliefs(
     estimators: tuple[FG, ...],
     timestep: int,
-) -> tuple[LineLocalBelief, ...]:
+) -> tuple[LocalBelief, ...]:
     return tuple(_local_belief(estimator, timestep) for estimator in estimators)
 
 
-def _local_belief(estimator: FG, timestep: int) -> LineLocalBelief:
-    return LineLocalBelief(
+def _local_belief(estimator: FG, timestep: int) -> LocalBelief:
+    return LocalBelief(
         estimate=estimator.estimate(timestep),
         covariance=estimator.covariance(timestep),
     )

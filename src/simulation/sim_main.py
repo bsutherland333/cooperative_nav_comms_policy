@@ -18,13 +18,15 @@ import jax.numpy as jnp
 from policy.actor import Actor
 from policy.function_provider import FunctionProvider
 from simulation.base import Plotter, Simulation
-from simulation.line_sim.encoding import LineStateEncoder
+from simulation.reward import TraceReward
+from simulation.line_sim.encoding import LineActorEncoder
 from simulation.line_sim.plotter import LinePlotter
 from simulation.line_sim.sim import LineSimulation
 
 
 FAKE_POLICY_NO_COMMUNICATION_BIAS = 4.0
 PLOT_N_SIGMA = 2.0
+STANDALONE_COMMUNICATION_COST = 0.01
 
 
 @dataclass(frozen=True)
@@ -32,6 +34,7 @@ class StandaloneSimConfig:
     """Runtime configuration for standalone simulator verification."""
 
     simulator_name: str
+    reward_function_name: str
     num_agents: int
     num_steps: int
 
@@ -43,7 +46,7 @@ class FixedLogitProvider(FunctionProvider):
         super().__init__(input_size=input_size, output_size=int(logits.shape[0]))
         self.parameters = {"logits": jnp.asarray(logits)}
 
-    def _apply(self, parameters: Any, inputs: jnp.ndarray) -> jnp.ndarray:
+    def apply(self, parameters: Any, inputs: jnp.ndarray) -> jnp.ndarray:
         del inputs
         return parameters["logits"]
 
@@ -55,12 +58,14 @@ def parse_args(argv: Sequence[str] | None) -> StandaloneSimConfig:
     """Parse CLI arguments for a standalone simulator run."""
     parser = ArgumentParser(description="Run a simulator without training.")
     parser.add_argument("--simulator", default="line", dest="simulator_name")
+    parser.add_argument("--reward-function", default="trace")
     parser.add_argument("--num-agents", default=3, type=_positive_int)
     parser.add_argument("--num-steps", default=25, type=_positive_int)
     args = parser.parse_args(argv)
 
     return StandaloneSimConfig(
         simulator_name=args.simulator_name,
+        reward_function_name=args.reward_function,
         num_agents=args.num_agents,
         num_steps=args.num_steps,
     )
@@ -103,16 +108,16 @@ def build_fake_actor(config: StandaloneSimConfig) -> Actor:
     """Build a fixed-logit random policy biased toward no communication."""
     logits = jnp.zeros(config.num_agents)
     logits = logits.at[0].set(FAKE_POLICY_NO_COMMUNICATION_BIAS)
-    state_encoder = LineStateEncoder(num_agents=config.num_agents)
+    actor_encoder = LineActorEncoder(num_agents=config.num_agents)
     provider = FixedLogitProvider(
-        input_size=state_encoder.actor_state_size,
+        input_size=actor_encoder.state_size,
         logits=logits,
     )
     return Actor(
-        state_size=state_encoder.actor_state_size,
+        state_size=actor_encoder.state_size,
         action_size=config.num_agents,
         function_provider=provider,
-        state_encoder=state_encoder,
+        actor_encoder=actor_encoder,
     )
 
 
@@ -123,10 +128,23 @@ def build_simulation(config: StandaloneSimConfig, actor: Actor) -> Simulation:
             actor=actor,
             num_agents=config.num_agents,
             num_steps=config.num_steps,
+            reward_function=build_reward_function(config),
         )
 
     raise NotImplementedError(
         f"No standalone simulator is registered for '{config.simulator_name}'."
+    )
+
+
+def build_reward_function(config: StandaloneSimConfig) -> TraceReward:
+    """Create the requested standalone reward function."""
+    if config.reward_function_name == "trace":
+        return TraceReward(
+            communication_cost=STANDALONE_COMMUNICATION_COST
+        )
+
+    raise NotImplementedError(
+        f"No standalone reward function '{config.reward_function_name}' is registered."
     )
 
 

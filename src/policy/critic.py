@@ -1,16 +1,22 @@
 """Centralized value-function critic."""
 
-from typing import Any
+from typing import Any, Sequence
 
 import jax.numpy as jnp
 
 from policy.function_provider import FunctionProvider
+from policy.state_encoding import CriticEncoder
 
 
 class Critic:
     """Centralized critic that estimates U_phi(s) for the team belief state."""
 
-    def __init__(self, state_size: int, function_provider: FunctionProvider) -> None:
+    def __init__(
+        self,
+        state_size: int,
+        function_provider: FunctionProvider,
+        critic_encoder: CriticEncoder,
+    ) -> None:
         """Validate and store the value-function provider."""
         if state_size <= 0:
             raise ValueError("state_size must be positive.")
@@ -21,10 +27,11 @@ class Critic:
 
         self.state_size = state_size
         self.function_provider = function_provider
+        self.critic_encoder = critic_encoder
 
-    def value(self, team_state: jnp.ndarray) -> jnp.ndarray:
-        """Return the scalar value estimate for a team belief state."""
-        state = jnp.asarray(team_state)
+    def value(self, local_beliefs: Sequence[Any]) -> jnp.ndarray:
+        """Return the scalar value estimate for a team belief snapshot."""
+        state = jnp.asarray(self.critic_encoder.encode_state(local_beliefs))
         if state.shape != (self.state_size,):
             raise ValueError("Critic state must be a flat vector of length state_size.")
 

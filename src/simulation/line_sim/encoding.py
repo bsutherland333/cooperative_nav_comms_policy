@@ -1,24 +1,23 @@
-"""State encoding for the line simulation."""
+"""State encoders for the line simulation."""
 
 from typing import Any, Sequence
 
 import jax.numpy as jnp
 
-from policy.state_encoding import StateEncoder
+from policy.state_encoding import ActorEncoder, CriticEncoder
 
 
-class LineStateEncoder(StateEncoder):
-    """Encode line-simulation estimator beliefs for policy/value functions."""
+class LineActorEncoder(ActorEncoder):
+    """Encode line-simulation estimator beliefs for the local actor."""
 
     def __init__(self, num_agents: int) -> None:
         """Store line-sim encoding dimensions."""
         if num_agents < 2:
             raise ValueError("At least two agents are required.")
         self.num_agents = num_agents
-        self.actor_state_size = 1 + 2 * num_agents
-        self.critic_state_size = num_agents * self.actor_state_size
+        self.state_size = 1 + 2 * num_agents
 
-    def encode_actor_state(self, local_belief: Any, agent_id: int) -> jnp.ndarray:
+    def encode_state(self, local_belief: Any, agent_id: int) -> jnp.ndarray:
         """Encode one local factor-graph belief for the shared actor."""
         return jnp.concatenate(
             (
@@ -28,13 +27,25 @@ class LineStateEncoder(StateEncoder):
             )
         )
 
-    def encode_critic_state(self, local_beliefs: Sequence[Any]) -> jnp.ndarray:
-        """Encode all local beliefs by concatenating actor-style features."""
+
+class LineCriticEncoder(CriticEncoder):
+    """Encode line-simulation estimator beliefs for the global critic."""
+
+    def __init__(self, num_agents: int) -> None:
+        """Store line-sim global encoding dimensions."""
+        if num_agents < 2:
+            raise ValueError("At least two agents are required.")
+        self.num_agents = num_agents
+        self.actor_encoder = LineActorEncoder(num_agents=num_agents)
+        self.state_size = num_agents * self.actor_encoder.state_size
+
+    def encode_state(self, local_beliefs: Sequence[Any]) -> jnp.ndarray:
+        """Encode the ordered global belief snapshot for the centralized critic."""
         if len(local_beliefs) != self.num_agents:
             raise ValueError("Expected one local belief per agent.")
         return jnp.concatenate(
             tuple(
-                self.encode_actor_state(
+                self.actor_encoder.encode_state(
                     local_belief=local_belief,
                     agent_id=agent_id,
                 )

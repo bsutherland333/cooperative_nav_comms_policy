@@ -1,14 +1,19 @@
 """Simulation contracts and result containers."""
 
 from simulation.base import Plotter, Simulation
-from simulation.results import (
+from simulation.data_structures import (
     EpisodeResult,
+    LocalBelief,
     SimulationStep,
 )
+from simulation.reward import RewardFunction, TraceReward
 
 __all__ = [
     "EpisodeResult",
+    "LocalBelief",
     "Plotter",
+    "RewardFunction",
     "Simulation",
     "SimulationStep",
+    "TraceReward",
 ]

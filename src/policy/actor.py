@@ -8,7 +8,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from policy.function_provider import FunctionProvider
-from policy.state_encoding import StateEncoder
+from policy.state_encoding import ActorEncoder
 
 
 @dataclass(frozen=True)
@@ -27,7 +27,7 @@ class Actor:
         state_size: int,
         action_size: int,
         function_provider: FunctionProvider,
-        state_encoder: StateEncoder,
+        actor_encoder: ActorEncoder,
     ) -> None:
         """Validate and store the actor's function provider."""
         if state_size <= 0:
@@ -42,7 +42,7 @@ class Actor:
         self.state_size = state_size
         self.action_size = action_size
         self.function_provider = function_provider
-        self.state_encoder = state_encoder
+        self.actor_encoder = actor_encoder
         self._rng_key = jax.random.PRNGKey(
             int(np.random.default_rng().integers(0, np.iinfo(np.uint32).max))
         )
@@ -55,7 +55,7 @@ class Actor:
     ) -> ActorDecision:
         """Choose an action by sampling during training or argmax during evaluation."""
         state = jnp.asarray(
-            self.state_encoder.encode_actor_state(
+            self.actor_encoder.encode_state(
                 local_belief=local_belief,
                 agent_id=agent_id,
             )

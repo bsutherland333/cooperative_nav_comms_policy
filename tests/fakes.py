@@ -7,9 +7,10 @@ import jax.numpy as jnp
 
 from policy.actor import Actor
 from policy.function_provider import FunctionProvider
-from policy.state_encoding import StateEncoder
+from policy.state_encoding import ActorEncoder, CriticEncoder
 from simulation.base import Plotter, Simulation
-from simulation.results import EpisodeResult
+from simulation.reward import RewardFunction
+from simulation.data_structures import EpisodeResult
 
 
 class FixedOutputProvider(FunctionProvider):
@@ -20,7 +21,7 @@ class FixedOutputProvider(FunctionProvider):
         super().__init__(input_size=input_size, output_size=int(output.shape[0]))
         self.parameters = {"output": jnp.asarray(output)}
 
-    def _apply(self, parameters: Any, inputs: jnp.ndarray) -> jnp.ndarray:
+    def apply(self, parameters: Any, inputs: jnp.ndarray) -> jnp.ndarray:
         self.last_inputs = inputs
         return parameters["output"]
 
@@ -30,15 +31,32 @@ class FixedOutputProvider(FunctionProvider):
         }
 
 
-class IdentityStateEncoder(StateEncoder):
-    """State encoder that treats the local belief as an already encoded vector."""
+class IdentityActorEncoder(ActorEncoder):
+    """Actor encoder that treats the local belief as an encoded vector."""
 
-    def encode_actor_state(self, local_belief: Any, agent_id: int) -> jnp.ndarray:
+    def encode_state(self, local_belief: Any, agent_id: int) -> jnp.ndarray:
         del agent_id
         return jnp.asarray(local_belief)
 
-    def encode_critic_state(self, local_beliefs: Sequence[Any]) -> jnp.ndarray:
+
+class IdentityCriticEncoder(CriticEncoder):
+    """Critic encoder that concatenates already encoded local belief vectors."""
+
+    def encode_state(self, local_beliefs: Sequence[Any]) -> jnp.ndarray:
         return jnp.concatenate(tuple(jnp.asarray(belief) for belief in local_beliefs))
+
+
+class ZeroRewardFunction(RewardFunction):
+    """Reward function that always returns zero."""
+
+    def __call__(
+        self,
+        decision_local_beliefs: Sequence[Any],
+        updated_local_beliefs: Sequence[Any],
+        communication_events: tuple[tuple[int, int], ...],
+    ) -> float:
+        del decision_local_beliefs, updated_local_beliefs, communication_events
+        return 0.0
 
 
 class FakeSimulation(Simulation):
@@ -49,7 +67,12 @@ class FakeSimulation(Simulation):
     instances: list["FakeSimulation"] = []
 
     def __init__(self, actor: Actor) -> None:
-        super().__init__(actor=actor)
+        super().__init__(
+            actor=actor,
+            num_agents=actor.action_size,
+            num_steps=1,
+            reward_function=ZeroRewardFunction(),
+        )
         self.plot_calls: list[dict[str, Any]] = []
         self.instances.append(self)
 
