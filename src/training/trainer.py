@@ -25,6 +25,14 @@ class _EpisodeTrainingArrays:
     returns: jnp.ndarray
 
 
+@dataclass(frozen=True)
+class TrainingUpdateResult:
+    """Scalar metrics produced by one training update."""
+
+    critic_loss: float
+    average_discounted_return: float
+
+
 class Trainer:
     """Coordinate single-episode actor-critic training."""
 
@@ -77,10 +85,13 @@ class Trainer:
         )
         return float(loss)
 
-    def update_from_episode(self, episode: EpisodeResult) -> float:
-        """Apply one update from a rollout and return post-update critic loss."""
+    def update_from_episode(self, episode: EpisodeResult) -> TrainingUpdateResult:
+        """Apply one update from a rollout and return scalar update metrics."""
         if not episode.steps:
-            return 0.0
+            return TrainingUpdateResult(
+                critic_loss=0.0,
+                average_discounted_return=0.0,
+            )
 
         training_arrays = self._episode_training_arrays(episode)
 
@@ -113,7 +124,10 @@ class Trainer:
             training_arrays.global_states,
             training_arrays.returns,
         )
-        return float(updated_critic_loss)
+        return TrainingUpdateResult(
+            critic_loss=float(updated_critic_loss),
+            average_discounted_return=float(jnp.mean(training_arrays.returns)),
+        )
 
     def _episode_training_arrays(self, episode: EpisodeResult) -> _EpisodeTrainingArrays:
         """Encode one episode into stacked arrays for vectorized JAX updates."""

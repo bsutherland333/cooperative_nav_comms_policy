@@ -4,6 +4,7 @@ from argparse import ArgumentParser, ArgumentTypeError
 from collections.abc import Sequence
 from dataclasses import dataclass
 import sys
+import time
 
 import matplotlib.pyplot as plt
 
@@ -115,21 +116,36 @@ def run_training(config: RunConfig) -> None:
     )
     training_iterations: list[int] = []
     reward_sums: list[float] = []
+    average_discounted_returns: list[float] = []
     critic_losses: list[float] = []
+    eta_iteration_durations: list[float] = []
     try:
         for iteration_index in range(config.num_training_iterations):
+            iteration_started_at = time.perf_counter()
             training_episode = trainer.collect_training_episode()
-            critic_loss = trainer.update_from_episode(training_episode)
+            update_result = trainer.update_from_episode(training_episode)
 
             training_iteration = iteration_index + 1
             reward_sum = sum(float(step.reward) for step in training_episode.steps)
+            average_discounted_return = update_result.average_discounted_return
             training_iterations.append(training_iteration)
             reward_sums.append(reward_sum)
-            critic_losses.append(critic_loss)
+            average_discounted_returns.append(average_discounted_return)
+            critic_losses.append(update_result.critic_loss)
+            iteration_duration = time.perf_counter() - iteration_started_at
+            if iteration_index > 0:
+                eta_iteration_durations.append(iteration_duration)
+            eta_seconds = _estimated_remaining_seconds(
+                iteration_durations=eta_iteration_durations,
+                remaining_iterations=config.num_training_iterations
+                - training_iteration,
+            )
             print(
                 f"iteration={training_iteration} "
                 f"reward_sum={reward_sum:.6g} "
-                f"critic_loss={critic_loss:.6g}"
+                f"average_discounted_return={average_discounted_return:.6g} "
+                f"critic_loss={update_result.critic_loss:.6g} "
+                f"eta={_format_eta(eta_seconds)}"
             )
     except KeyboardInterrupt:
         print("Training interrupted; running final evaluation.", file=sys.stderr)
@@ -143,14 +159,17 @@ def run_training(config: RunConfig) -> None:
         output_path=None,
         show=True,
     )
-    figure, axes = plt.subplots(nrows=2, sharex=True)
+    figure, axes = plt.subplots(nrows=3, sharex=True)
     axes[0].plot(training_iterations, reward_sums, linewidth=1.0)
     axes[0].set_ylabel("reward sum")
     axes[0].grid(True, alpha=0.3)
-    axes[1].plot(training_iterations, critic_losses, linewidth=1.0)
-    axes[1].set_xlabel("training iteration")
-    axes[1].set_ylabel("critic loss")
+    axes[1].plot(training_iterations, average_discounted_returns, linewidth=1.0)
+    axes[1].set_ylabel("avg discounted return")
     axes[1].grid(True, alpha=0.3)
+    axes[2].plot(training_iterations, critic_losses, linewidth=1.0)
+    axes[2].set_xlabel("training iteration")
+    axes[2].set_ylabel("critic loss")
+    axes[2].grid(True, alpha=0.3)
     figure.suptitle("Training status")
     figure.tight_layout()
     plt.show()
@@ -273,6 +292,35 @@ def build_plotter(config: RunConfig) -> Plotter:
     raise NotImplementedError(
         f"No plotter is registered for simulator '{config.simulator_name}'."
     )
+
+
+def _estimated_remaining_seconds(
+    iteration_durations: Sequence[float],
+    remaining_iterations: int,
+) -> float | None:
+    if remaining_iterations == 0:
+        return 0.0
+    if not iteration_durations:
+        return None
+
+    duration_window = tuple(iteration_durations[-10:])
+    return sum(duration_window) / len(duration_window) * remaining_iterations
+
+
+def _format_eta(seconds: float | None) -> str:
+    if seconds is None:
+        return "unknown"
+
+    rounded_seconds = int(round(max(0.0, seconds)))
+    minutes, seconds_remainder = divmod(rounded_seconds, 60)
+    if minutes == 0:
+        return f"{seconds_remainder}s"
+
+    hours, minutes_remainder = divmod(minutes, 60)
+    if hours == 0:
+        return f"{minutes_remainder}m{seconds_remainder:02d}s"
+
+    return f"{hours}h{minutes_remainder:02d}m{seconds_remainder:02d}s"
 
 
 def _positive_int(value: str) -> int:

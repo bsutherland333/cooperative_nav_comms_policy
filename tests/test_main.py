@@ -21,6 +21,7 @@ from tests.fakes import (
     FakeSimulation,
     FixedOutputProvider,
 )
+from training.trainer import TrainingUpdateResult
 
 
 class RecordingTrainer:
@@ -49,10 +50,13 @@ class RecordingTrainer:
             },
         )
 
-    def update_from_episode(self, episode: EpisodeResult) -> float:
+    def update_from_episode(self, episode: EpisodeResult) -> TrainingUpdateResult:
         self.update_count += 1
         self.update_episodes.append(episode)
-        return 1.25
+        return TrainingUpdateResult(
+            critic_loss=1.25,
+            average_discounted_return=float(self.training_episode_count),
+        )
 
 
 class InterruptingTrainer(RecordingTrainer):
@@ -115,6 +119,12 @@ def test_run_training_orchestrates_training_and_status_reporting(
     monkeypatch.setattr(main, "build_plotter", lambda config: FakePlotter())
     monkeypatch.setattr(main, "Trainer", RecordingTrainer)
     monkeypatch.setattr(main.plt, "show", lambda: show_calls.append(True))
+    perf_counter_values = iter((0.0, 10.0, 10.0, 12.0, 12.0, 16.0))
+    monkeypatch.setattr(
+        main.time,
+        "perf_counter",
+        lambda: next(perf_counter_values),
+    )
 
     main.run_training(config)
 
@@ -132,10 +142,41 @@ def test_run_training_orchestrates_training_and_status_reporting(
     assert trainer.kwargs["critic_learning_rate"] == 0.2
     assert trainer.kwargs["discount_factor"] == 0.9
     assert trainer.kwargs["entropy_coefficient"] == 0.01
-    assert "iteration=1 reward_sum=1 critic_loss=1.25" in captured.out
-    assert "iteration=2 reward_sum=2 critic_loss=1.25" in captured.out
-    assert "iteration=3 reward_sum=3 critic_loss=1.25" in captured.out
+    assert (
+        "iteration=1 reward_sum=1 average_discounted_return=1 critic_loss=1.25"
+        in captured.out
+    )
+    assert (
+        "iteration=1 reward_sum=1 average_discounted_return=1 "
+        "critic_loss=1.25 eta=unknown"
+        in captured.out
+    )
+    assert (
+        "iteration=2 reward_sum=2 average_discounted_return=2 critic_loss=1.25"
+        in captured.out
+    )
+    assert (
+        "iteration=2 reward_sum=2 average_discounted_return=2 "
+        "critic_loss=1.25 eta=2s"
+        in captured.out
+    )
+    assert (
+        "iteration=3 reward_sum=3 average_discounted_return=3 critic_loss=1.25"
+        in captured.out
+    )
+    assert (
+        "iteration=3 reward_sum=3 average_discounted_return=3 "
+        "critic_loss=1.25 eta=0s"
+        in captured.out
+    )
     assert show_calls == [True]
+    status_axes = main.plt.gcf().axes
+    assert [axis.get_ylabel() for axis in status_axes] == [
+        "reward sum",
+        "avg discounted return",
+        "critic loss",
+    ]
+    assert list(status_axes[1].lines[0].get_ydata()) == [1.0, 2.0, 3.0]
 
     final_plotter = FakePlotter.instances[0]
     assert final_plotter.plot_calls[0]["n_sigma"] == 2.0
@@ -184,7 +225,10 @@ def test_run_training_plots_final_evaluation_after_keyboard_interrupt(
     assert trainer.training_episode_count == 1
     assert trainer.update_count == 1
     assert "Training interrupted; running final evaluation." in captured.err
-    assert "iteration=1 reward_sum=1 critic_loss=1.25" in captured.out
+    assert (
+        "iteration=1 reward_sum=1 average_discounted_return=1 critic_loss=1.25"
+        in captured.out
+    )
     assert show_calls == [True]
 
     assert len(FakeSimulation.instances) == 1
@@ -199,6 +243,31 @@ def test_function_type_cli_arg_is_parsed() -> None:
     config = main.parse_args(["--function", "mlp"])
 
     assert config.function_type == "mlp"
+
+
+def test_estimated_remaining_seconds_uses_last_ten_durations() -> None:
+    eta_seconds = main._estimated_remaining_seconds(
+        iteration_durations=tuple(float(duration) for duration in range(1, 12)),
+        remaining_iterations=3,
+    )
+
+    assert eta_seconds == pytest.approx(19.5)
+
+
+def test_estimated_remaining_seconds_waits_for_timing_sample() -> None:
+    eta_seconds = main._estimated_remaining_seconds(
+        iteration_durations=(),
+        remaining_iterations=3,
+    )
+
+    assert eta_seconds is None
+
+
+def test_format_eta_uses_compact_duration() -> None:
+    assert main._format_eta(None) == "unknown"
+    assert main._format_eta(2.2) == "2s"
+    assert main._format_eta(62.0) == "1m02s"
+    assert main._format_eta(3661.0) == "1h01m01s"
 
 
 def test_reward_cli_arg_is_parsed() -> None:
