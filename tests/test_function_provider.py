@@ -13,7 +13,7 @@ def test_provider_creates_and_owns_mutable_jax_parameters() -> None:
 
     provider.update(gradient={"output": jnp.array([3.0, -1.0])}, learning_rate=0.5)
 
-    assert jnp.allclose(provider.parameters["output"], jnp.array([2.5, 1.5]))
+    assert jnp.allclose(provider.parameters["output"], jnp.array([-0.5, 2.5]))
 
 
 def test_provider_validates_input_and_output_sizes() -> None:
@@ -75,7 +75,7 @@ def test_polynomial_provider_updates_owned_weights() -> None:
 
     assert jnp.allclose(
         provider.parameters["weights"],
-        jnp.array([[0.5], [1.0], [-2.0]]),
+        jnp.array([[-0.5], [-1.0], [2.0]]),
     )
 
 

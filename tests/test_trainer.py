@@ -87,10 +87,10 @@ def test_trainer_update_noops_on_empty_episode() -> None:
     trainer.update_from_episode(EpisodeResult(steps=(), metadata={}))
 
     assert jnp.allclose(
-        actor.function_provider.parameters["output"],
+        actor.get_parameters()["output"],
         jnp.array([0.0, 0.0]),
     )
-    assert jnp.allclose(critic.function_provider.parameters["output"], jnp.array([0.0]))
+    assert jnp.allclose(critic.get_parameters()["output"], jnp.array([0.0]))
 
 
 def test_trainer_update_applies_actor_ascent_and_critic_descent() -> None:
@@ -106,11 +106,11 @@ def test_trainer_update_applies_actor_ascent_and_critic_descent() -> None:
     )
 
     assert jnp.allclose(
-        actor.function_provider.parameters["output"],
+        actor.get_parameters()["output"],
         jnp.array([-0.1, 0.1]),
     )
     assert jnp.allclose(
-        critic.function_provider.parameters["output"],
+        critic.get_parameters()["output"],
         jnp.array([0.125]),
     )
 
@@ -128,7 +128,7 @@ def test_trainer_critic_uses_discounted_reward_to_go_targets() -> None:
     )
 
     assert jnp.allclose(
-        critic.function_provider.parameters["output"],
+        critic.get_parameters()["output"],
         jnp.array([0.125]),
     )
 
@@ -151,7 +151,7 @@ def test_trainer_actor_bootstraps_nonterminal_td_advantages() -> None:
     )
 
     assert jnp.allclose(
-        actor.function_provider.parameters["output"],
+        actor.get_parameters()["output"],
         jnp.array([0.1, -0.1]),
     )
 
@@ -173,7 +173,7 @@ def test_trainer_actor_bootstraps_from_next_pre_decision_beliefs() -> None:
     )
 
     assert jnp.allclose(
-        actor.function_provider.parameters["output"],
+        actor.get_parameters()["output"],
         jnp.array([0.05, -0.05]),
     )
 

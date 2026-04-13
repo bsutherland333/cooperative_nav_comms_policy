@@ -93,7 +93,17 @@ def test_line_sim_merges_duplicate_communication_requests() -> None:
 
 
 def test_line_sim_records_the_decision_time_beliefs_used_by_actor() -> None:
-    actor = _actor(np.array([5.0, 0.0]))
+    actor_encoder = LineActorEncoder(num_agents=2)
+    provider = FixedOutputProvider(
+        input_size=actor_encoder.state_size,
+        output=np.array([5.0, 0.0]),
+    )
+    actor = Actor(
+        state_size=actor_encoder.state_size,
+        action_size=2,
+        function_provider=provider,
+        actor_encoder=actor_encoder,
+    )
     sim = LineSimulation(
         actor=actor,
         num_agents=2,
@@ -103,8 +113,6 @@ def test_line_sim_records_the_decision_time_beliefs_used_by_actor() -> None:
 
     episode = sim.run(exploration=False)
 
-    provider = actor.function_provider
-    actor_encoder = actor.actor_encoder
     expected_last_actor_input = actor_encoder.encode_state(
         local_belief=episode.steps[0].local_beliefs[1],
         agent_id=1,

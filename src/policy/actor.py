@@ -41,7 +41,7 @@ class Actor:
 
         self.state_size = state_size
         self.action_size = action_size
-        self.function_provider = function_provider
+        self._function_provider = function_provider
         self.actor_encoder = actor_encoder
         self._rng_key = jax.random.PRNGKey(
             int(np.random.default_rng().integers(0, np.iinfo(np.uint32).max))
@@ -63,10 +63,7 @@ class Actor:
         if state.shape != (self.state_size,):
             raise ValueError("Actor state must be a flat vector of length state_size.")
 
-        logits = jnp.asarray(self.function_provider(state))
-        if logits.shape != (self.action_size,):
-            raise ValueError("Actor provider must return one logit per action.")
-
+        logits = self.logits_with_parameters(self.get_parameters(), state)
         probabilities = jax.nn.softmax(logits)
 
         if exploration:
@@ -81,5 +78,26 @@ class Actor:
         )
 
     def update(self, gradient: Any, learning_rate: float) -> None:
-        """Apply a precomputed policy-parameter gradient through the provider."""
-        self.function_provider.update(gradient, learning_rate)
+        """Apply a precomputed policy-objective gradient through the provider."""
+        self._function_provider.update(
+            jax.tree_util.tree_map(lambda gradient_leaf: -gradient_leaf, gradient),
+            learning_rate,
+        )
+
+    def get_parameters(self) -> Any:
+        """Return the actor parameters for explicit JAX transformations."""
+        return self._function_provider.parameters
+
+    def logits_with_parameters(
+        self,
+        parameters: Any,
+        state: jnp.ndarray,
+    ) -> jnp.ndarray:
+        """Evaluate action logits for an already encoded actor state."""
+        if state.shape != (self.state_size,):
+            raise ValueError("Actor state must be a flat vector of length state_size.")
+
+        logits = jnp.asarray(self._function_provider.apply(parameters, state))
+        if logits.shape != (self.action_size,):
+            raise ValueError("Actor provider must return one logit per action.")
+        return logits

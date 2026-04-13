@@ -26,21 +26,34 @@ class Critic:
             raise ValueError("Value critic provider output_size must be 1.")
 
         self.state_size = state_size
-        self.function_provider = function_provider
+        self._function_provider = function_provider
         self.critic_encoder = critic_encoder
 
     def value(self, local_beliefs: Sequence[Any]) -> jnp.ndarray:
         """Return the scalar value estimate for a team belief snapshot."""
         state = jnp.asarray(self.critic_encoder.encode_state(local_beliefs))
+
+        return self.value_with_parameters(self.get_parameters(), state)
+
+    def update(self, gradient: Any, learning_rate: float) -> None:
+        """Apply a precomputed value-function loss gradient through the provider."""
+        self._function_provider.update(gradient, learning_rate)
+
+    def get_parameters(self) -> Any:
+        """Return the critic parameters for explicit JAX transformations."""
+        return self._function_provider.parameters
+
+    def value_with_parameters(
+        self,
+        parameters: Any,
+        state: jnp.ndarray,
+    ) -> jnp.ndarray:
+        """Evaluate the scalar value for an already encoded critic state."""
         if state.shape != (self.state_size,):
             raise ValueError("Critic state must be a flat vector of length state_size.")
 
-        value = jnp.asarray(self.function_provider(state))
+        value = jnp.asarray(self._function_provider.apply(parameters, state))
         if value.shape != (1,):
             raise ValueError("Value critic provider must return a length-1 vector.")
 
         return value[0]
-
-    def update(self, gradient: Any, learning_rate: float) -> None:
-        """Apply a precomputed value-function gradient through the provider."""
-        self.function_provider.update(gradient, learning_rate)

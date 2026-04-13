@@ -88,4 +88,16 @@ def test_actor_update_delegates_to_provider() -> None:
 
     actor.update(gradient={"output": jnp.array([0.5, -1.0, 2.0])}, learning_rate=0.1)
 
-    assert jnp.allclose(provider.parameters["output"], jnp.array([1.05, 1.9, 0.2]))
+    assert jnp.allclose(actor.get_parameters()["output"], jnp.array([1.05, 1.9, 0.2]))
+
+
+def test_actor_keeps_function_provider_private() -> None:
+    provider = FixedOutputProvider(input_size=2, output=jnp.array([1.0, 2.0, 0.0]))
+    actor = Actor(
+        state_size=2,
+        action_size=3,
+        function_provider=provider,
+        actor_encoder=IdentityActorEncoder(),
+    )
+
+    assert not hasattr(actor, "function_provider")

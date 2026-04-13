@@ -27,7 +27,7 @@ class FixedOutputProvider(FunctionProvider):
 
     def update(self, gradient: Any, learning_rate: float) -> None:
         self.parameters = {
-            "output": self.parameters["output"] + learning_rate * gradient["output"]
+            "output": self.parameters["output"] - learning_rate * gradient["output"]
         }
 
 

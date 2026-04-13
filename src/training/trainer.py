@@ -86,8 +86,8 @@ class Trainer:
             discount_factor=self.discount_factor,
         )
 
-        actor_parameters = self.actor.function_provider.parameters
-        critic_parameters = self.critic.function_provider.parameters
+        actor_parameters = self.actor.get_parameters()
+        critic_parameters = self.critic.get_parameters()
         actor_gradient = jax.grad(
             lambda parameters: self._actor_objective(
                 actor_parameters=parameters,
@@ -111,10 +111,7 @@ class Trainer:
             learning_rate=self.actor_learning_rate,
         )
         self.critic.update(
-            gradient=jax.tree_util.tree_map(
-                lambda gradient: -gradient,
-                critic_loss_gradient,
-            ),
+            gradient=critic_loss_gradient,
             learning_rate=self.critic_learning_rate,
         )
 
@@ -152,7 +149,7 @@ class Trainer:
                 action_vectors[step_index],
                 strict=True,
             ):
-                logits = self.actor.function_provider.apply(
+                logits = self.actor.logits_with_parameters(
                     actor_parameters,
                     local_state,
                 )
@@ -186,12 +183,7 @@ class Trainer:
 
     def _critic_value(self, parameters: Any, global_state: jnp.ndarray) -> jnp.ndarray:
         """Evaluate the centralized critic with explicit parameters."""
-        value = jnp.asarray(
-            self.critic.function_provider.apply(parameters, global_state)
-        )
-        if value.shape != (1,):
-            raise ValueError("Value critic provider must return a length-1 vector.")
-        return value[0]
+        return self.critic.value_with_parameters(parameters, global_state)
 
     def _run_episode(
         self,

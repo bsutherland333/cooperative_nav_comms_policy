@@ -40,6 +40,17 @@ def test_critic_update_delegates_to_provider() -> None:
         critic_encoder=IdentityCriticEncoder(),
     )
 
-    critic.update(gradient={"output": jnp.array([-1.0])}, learning_rate=0.25)
+    critic.update(gradient={"output": jnp.array([1.0])}, learning_rate=0.25)
 
-    assert jnp.allclose(provider.parameters["output"], jnp.array([3.25]))
+    assert jnp.allclose(critic.get_parameters()["output"], jnp.array([3.25]))
+
+
+def test_critic_keeps_function_provider_private() -> None:
+    provider = FixedOutputProvider(input_size=4, output=jnp.array([3.5]))
+    critic = Critic(
+        state_size=4,
+        function_provider=provider,
+        critic_encoder=IdentityCriticEncoder(),
+    )
+
+    assert not hasattr(critic, "function_provider")

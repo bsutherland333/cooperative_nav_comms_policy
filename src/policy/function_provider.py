@@ -29,4 +29,4 @@ class FunctionProvider(ABC):
 
     @abstractmethod
     def update(self, gradient: Any, learning_rate: float) -> None:
-        """Update provider-owned parameters in place."""
+        """Apply one gradient-descent step to provider-owned parameters."""

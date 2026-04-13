@@ -41,10 +41,10 @@ class PolynomialFunctionProvider(FunctionProvider):
         return jnp.prod(powered_inputs, axis=1)
 
     def update(self, gradient: Any, learning_rate: float) -> None:
-        """Apply an externally computed gradient to the owned weights."""
+        """Apply a gradient-descent step to the owned weights."""
         self.parameters = {
             "weights": self.parameters["weights"]
-            + learning_rate * gradient["weights"],
+            - learning_rate * gradient["weights"],
         }
 
 
