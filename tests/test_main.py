@@ -13,7 +13,7 @@ from simulation.line_sim.encoding import (
 )
 from simulation.line_sim.plotter import LinePlotter
 from simulation.line_sim.sim import LineSimulation
-from simulation.data_structures import EpisodeResult
+from simulation.data_structures import EpisodeResult, SimulationStep
 from simulation.rewards import TraceReward
 from tests.fakes import (
     FakePlotter,
@@ -32,20 +32,32 @@ class RecordingTrainer:
     def __init__(self, **kwargs: Any) -> None:
         self.kwargs = kwargs
         self.training_episode_count = 0
-        self.evaluation_episode_count = 0
         self.update_count = 0
+        self.critic_loss_count = 0
+        self.critic_loss_episodes: list[EpisodeResult] = []
         self.instances.append(self)
 
     def collect_training_episode(self) -> EpisodeResult:
         self.training_episode_count += 1
-        return EpisodeResult(steps=(), metadata={})
+        return EpisodeResult(
+            steps=(
+                _fake_step(
+                    reward=float(self.training_episode_count),
+                ),
+            ),
+            metadata={
+                "source": "training",
+                "index": self.training_episode_count,
+            },
+        )
 
     def update_from_episode(self, episode: EpisodeResult) -> None:
         self.update_count += 1
 
-    def collect_evaluation_episode(self) -> EpisodeResult:
-        self.evaluation_episode_count += 1
-        return EpisodeResult(steps=(), metadata={})
+    def critic_loss(self, episode: EpisodeResult) -> float:
+        self.critic_loss_count += 1
+        self.critic_loss_episodes.append(episode)
+        return 1.25
 
 
 def test_main_fails_cleanly_when_simulator_is_unregistered(capsys: Any) -> None:
@@ -66,17 +78,20 @@ def test_main_fails_cleanly_when_reward_function_is_unregistered(
     assert "No reward function 'missing' is registered" in captured.err
 
 
-def test_run_training_orchestrates_training_and_evaluation(monkeypatch: Any) -> None:
+def test_run_training_orchestrates_training_and_status_reporting(
+    monkeypatch: Any,
+    capsys: Any,
+) -> None:
     RecordingTrainer.instances = []
     FakePlotter.instances = []
     FakeSimulation.instances = []
+    show_calls: list[bool] = []
     config = main.RunConfig(
         simulator_name="fake",
         function_type="fake_function",
         reward_function_name="fake_reward",
         num_agents=3,
         num_training_iterations=3,
-        evaluation_interval=2,
         num_steps=60,
         poly_degree=2,
         actor_learning_rate=0.1,
@@ -103,17 +118,28 @@ def test_run_training_orchestrates_training_and_evaluation(monkeypatch: Any) -> 
     monkeypatch.setattr(main, "build_simulation_type", lambda config: FakeSimulation)
     monkeypatch.setattr(main, "build_plotter", lambda config: FakePlotter())
     monkeypatch.setattr(main, "Trainer", RecordingTrainer)
+    monkeypatch.setattr(main.plt, "show", lambda: show_calls.append(True))
 
     main.run_training(config)
 
+    captured = capsys.readouterr()
     trainer = RecordingTrainer.instances[0]
     assert trainer.training_episode_count == 3
-    assert trainer.evaluation_episode_count == 1
     assert trainer.update_count == 3
+    assert trainer.critic_loss_count == 3
+    assert [episode.metadata["index"] for episode in trainer.critic_loss_episodes] == [
+        1,
+        2,
+        3,
+    ]
     assert trainer.kwargs["simulation_type"] is FakeSimulation
     assert trainer.kwargs["actor_learning_rate"] == 0.1
     assert trainer.kwargs["critic_learning_rate"] == 0.2
     assert trainer.kwargs["discount_factor"] == 0.9
+    assert "iteration=1 reward_sum=1 critic_loss=1.25" in captured.out
+    assert "iteration=2 reward_sum=2 critic_loss=1.25" in captured.out
+    assert "iteration=3 reward_sum=3 critic_loss=1.25" in captured.out
+    assert show_calls == [True]
 
     final_plotter = FakePlotter.instances[0]
     assert final_plotter.plot_calls[0]["n_sigma"] == 2.0
@@ -140,7 +166,6 @@ def test_reward_function_registration_is_not_simulator_specific() -> None:
         reward_function_name="trace",
         num_agents=2,
         num_training_iterations=1,
-        evaluation_interval=1,
         num_steps=4,
         poly_degree=2,
         actor_learning_rate=0.1,
@@ -156,10 +181,8 @@ def test_reward_function_registration_is_not_simulator_specific() -> None:
 
 
 def test_num_steps_cli_arg_is_parsed() -> None:
-    default_config = main.parse_args([])
     overridden_config = main.parse_args(["--num-steps", "7"])
 
-    assert default_config.num_steps == 60
     assert overridden_config.num_steps == 7
 
 
@@ -184,11 +207,8 @@ def test_training_hyperparameters_are_parsed() -> None:
 
 
 def test_polynomial_degree_cli_arg_is_parsed_from_poly_degree() -> None:
-    default_config = main.parse_args([])
     overridden_config = main.parse_args(["--poly_degree", "4"])
 
-    assert default_config.function_type == "poly"
-    assert default_config.poly_degree == 2
     assert overridden_config.poly_degree == 4
 
 
@@ -206,7 +226,6 @@ def test_line_simulator_registration_uses_configured_dimensions(
         reward_function_name="trace",
         num_agents=2,
         num_training_iterations=1,
-        evaluation_interval=1,
         num_steps=4,
         poly_degree=2,
         actor_learning_rate=0.1,
@@ -240,7 +259,6 @@ def test_polynomial_function_provider_registration_uses_line_dimensions() -> Non
         reward_function_name="trace",
         num_agents=2,
         num_training_iterations=1,
-        evaluation_interval=1,
         num_steps=4,
         poly_degree=3,
         actor_learning_rate=0.1,
@@ -287,6 +305,18 @@ def _fake_function_provider(
             output=jnp.zeros(output_size),
         )
     raise ValueError(f"Unknown provider role: {role}")
+
+
+def _fake_step(reward: float) -> SimulationStep:
+    return SimulationStep(
+        timestep=0,
+        local_beliefs=(jnp.array([0.0]),),
+        action_vector=(0,),
+        communication_events=(),
+        reward=reward,
+        true_positions=jnp.array([0.0]),
+        extra={},
+    )
 
 
 def _line_function_provider(

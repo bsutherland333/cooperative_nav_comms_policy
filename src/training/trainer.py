@@ -1,4 +1,4 @@
-"""Training and evaluation orchestration."""
+"""Training orchestration."""
 
 from typing import Any
 
@@ -42,29 +42,28 @@ class Trainer:
 
     def collect_training_episode(self) -> EpisodeResult:
         """Run one training episode."""
-        return self._run_episode(
-            exploration=True,
-        )
+        simulation = self.simulation_type(self.actor)
+        return simulation.run(exploration=True)
 
-    def collect_evaluation_episode(self) -> EpisodeResult:
-        """Run one evaluation episode."""
-        return self._run_episode(
-            exploration=False,
+    def critic_loss(self, episode: EpisodeResult) -> float:
+        """Return the current mean critic loss for an episode."""
+        if not episode.steps:
+            return 0.0
+
+        global_states, returns = self._critic_training_inputs(episode)
+        loss = self._critic_loss(
+            critic_parameters=self.critic.get_parameters(),
+            global_states=global_states,
+            returns=returns,
         )
+        return float(loss)
 
     def update_from_episode(self, episode: EpisodeResult) -> None:
         """Apply one basic global-critic/local-actor update from a rollout."""
         if not episode.steps:
             return
 
-        global_states = tuple(
-            jnp.asarray(
-                self.critic.critic_encoder.encode_state(
-                    step.local_beliefs
-                )
-            )
-            for step in episode.steps
-        )
+        global_states, returns = self._critic_training_inputs(episode)
         local_actor_states = tuple(
             tuple(
                 jnp.asarray(
@@ -81,10 +80,6 @@ class Trainer:
         )
         action_vectors = tuple(step.action_vector for step in episode.steps)
         rewards = tuple(float(step.reward) for step in episode.steps)
-        returns = _discounted_returns(
-            rewards=rewards,
-            discount_factor=self.discount_factor,
-        )
 
         actor_parameters = self.actor.get_parameters()
         critic_parameters = self.critic.get_parameters()
@@ -165,6 +160,24 @@ class Trainer:
 
         return objective / (len(global_states) - 1)
 
+    def _critic_training_inputs(
+        self,
+        episode: EpisodeResult,
+    ) -> tuple[tuple[jnp.ndarray, ...], jnp.ndarray]:
+        """Encode critic states and discounted return targets for an episode."""
+        global_states = tuple(
+            jnp.asarray(
+                self.critic.critic_encoder.encode_state(step.local_beliefs)
+            )
+            for step in episode.steps
+        )
+        rewards = tuple(float(step.reward) for step in episode.steps)
+        returns = _discounted_returns(
+            rewards=rewards,
+            discount_factor=self.discount_factor,
+        )
+        return global_states, returns
+
     def _critic_loss(
         self,
         critic_parameters: Any,
@@ -184,15 +197,6 @@ class Trainer:
     def _critic_value(self, parameters: Any, global_state: jnp.ndarray) -> jnp.ndarray:
         """Evaluate the centralized critic with explicit parameters."""
         return self.critic.value_with_parameters(parameters, global_state)
-
-    def _run_episode(
-        self,
-        exploration: bool,
-    ) -> EpisodeResult:
-        """Build and run one simulator instance."""
-        simulation = self.simulation_type(self.actor)
-        return simulation.run(exploration=exploration)
-
 
 def _discounted_returns(
     rewards: tuple[float, ...],

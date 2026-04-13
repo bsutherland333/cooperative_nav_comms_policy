@@ -1,4 +1,4 @@
-"""Tests for training/evaluation orchestration."""
+"""Tests for training orchestration."""
 
 import jax.numpy as jnp
 
@@ -60,25 +60,6 @@ def test_training_episode_uses_exploration() -> None:
     }
 
 
-def test_evaluation_episode_disables_exploration() -> None:
-    trainer = _trainer()
-
-    episode = trainer.collect_evaluation_episode()
-
-    assert episode.metadata == {
-        "exploration": False,
-    }
-
-
-def test_evaluation_episode_does_not_plot() -> None:
-    trainer = _trainer()
-
-    trainer.collect_evaluation_episode()
-
-    simulation = FakeSimulation.instances[0]
-    assert simulation.plot_calls == []
-
-
 def test_trainer_update_noops_on_empty_episode() -> None:
     actor = _actor(jnp.array([0.0, 0.0]))
     critic = _critic()
@@ -91,6 +72,27 @@ def test_trainer_update_noops_on_empty_episode() -> None:
         jnp.array([0.0, 0.0]),
     )
     assert jnp.allclose(critic.get_parameters()["output"], jnp.array([0.0]))
+
+
+def test_trainer_critic_loss_returns_zero_for_empty_episode() -> None:
+    trainer = _trainer()
+
+    loss = trainer.critic_loss(EpisodeResult(steps=(), metadata={}))
+
+    assert loss == 0.0
+
+
+def test_trainer_critic_loss_uses_discounted_reward_to_go_targets() -> None:
+    trainer = _trainer()
+
+    loss = trainer.critic_loss(
+        _episode(
+            rewards=(1.0, 1.0),
+            action_vectors=((1, 1), (1, 1)),
+        )
+    )
+
+    assert jnp.isclose(loss, 0.8125)
 
 
 def test_trainer_update_applies_actor_ascent_and_critic_descent() -> None:

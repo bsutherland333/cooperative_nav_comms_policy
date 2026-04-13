@@ -1,9 +1,11 @@
-"""CLI entrypoint for training and evaluation runs."""
+"""CLI entrypoint for training and evaluation."""
 
 from argparse import ArgumentParser, ArgumentTypeError
 from collections.abc import Sequence
 from dataclasses import dataclass
 import sys
+
+import matplotlib.pyplot as plt
 
 from policy.actor import Actor
 from policy.critic import Critic
@@ -29,7 +31,6 @@ class RunConfig:
     reward_function_name: str
     num_agents: int
     num_training_iterations: int
-    evaluation_interval: int
     num_steps: int
     poly_degree: int
     actor_learning_rate: float
@@ -39,7 +40,7 @@ class RunConfig:
 
 
 def parse_args(argv: Sequence[str] | None) -> RunConfig:
-    """Parse CLI arguments for the full training/evaluation loop."""
+    """Parse CLI arguments for the full training loop."""
     parser = ArgumentParser(
         description="Train a cooperative localization communication policy."
     )
@@ -48,13 +49,12 @@ def parse_args(argv: Sequence[str] | None) -> RunConfig:
     parser.add_argument("--function-type", default="poly")
     parser.add_argument("--poly_degree", default=2, type=_nonnegative_int)
     parser.add_argument("--num-agents", default=2, type=_positive_int)
-    parser.add_argument("--num-training-iterations", default=1, type=_positive_int)
-    parser.add_argument("--evaluation-interval", default=1, type=_nonnegative_int)
-    parser.add_argument("--num-steps", default=60, type=_positive_int)
-    parser.add_argument("--actor-learning-rate", default=1e-3, type=_positive_float)
-    parser.add_argument("--critic-learning-rate", default=1e-3, type=_positive_float)
+    parser.add_argument("--num-training-iterations", default=50, type=_positive_int)
+    parser.add_argument("--num-steps", default=120, type=_positive_int)
+    parser.add_argument("--actor-learning-rate", default=1e-4, type=_positive_float)
+    parser.add_argument("--critic-learning-rate", default=1e-4, type=_positive_float)
     parser.add_argument("--discount-factor", default=0.95, type=_unit_interval_float)
-    parser.add_argument("--communication-cost", default=0.01, type=_nonnegative_float)
+    parser.add_argument("--communication-cost", default=0.1, type=_nonnegative_float)
     args = parser.parse_args(argv)
 
     return RunConfig(
@@ -63,7 +63,6 @@ def parse_args(argv: Sequence[str] | None) -> RunConfig:
         reward_function_name=args.reward_function,
         num_agents=args.num_agents,
         num_training_iterations=args.num_training_iterations,
-        evaluation_interval=args.evaluation_interval,
         num_steps=args.num_steps,
         poly_degree=args.poly_degree,
         actor_learning_rate=args.actor_learning_rate,
@@ -86,7 +85,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 def run_training(config: RunConfig) -> None:
-    """Run the intended training and evaluation loop."""
+    """Run the intended training loop."""
     simulation_type = build_simulation_type(config)
     actor = build_actor(config)
     critic = build_critic(config)
@@ -99,12 +98,24 @@ def run_training(config: RunConfig) -> None:
         critic_learning_rate=config.critic_learning_rate,
         discount_factor=config.discount_factor,
     )
+    training_iterations: list[int] = []
+    reward_sums: list[float] = []
+    critic_losses: list[float] = []
     for iteration_index in range(config.num_training_iterations):
         training_episode = trainer.collect_training_episode()
         trainer.update_from_episode(training_episode)
 
-        if should_evaluate(config, iteration_index):
-            trainer.collect_evaluation_episode()
+        training_iteration = iteration_index + 1
+        reward_sum = sum(float(step.reward) for step in training_episode.steps)
+        critic_loss = trainer.critic_loss(training_episode)
+        training_iterations.append(training_iteration)
+        reward_sums.append(reward_sum)
+        critic_losses.append(critic_loss)
+        print(
+            f"iteration={training_iteration} "
+            f"reward_sum={reward_sum:.6g} "
+            f"critic_loss={critic_loss:.6g}"
+        )
 
     final_simulation = simulation_type(actor)
     final_episode = final_simulation.run(exploration=False)
@@ -115,6 +126,17 @@ def run_training(config: RunConfig) -> None:
         output_path=None,
         show=True,
     )
+    figure, axes = plt.subplots(nrows=2, sharex=True)
+    axes[0].plot(training_iterations, reward_sums)
+    axes[0].set_ylabel("reward sum")
+    axes[0].grid(True, alpha=0.3)
+    axes[1].plot(training_iterations, critic_losses)
+    axes[1].set_xlabel("training iteration")
+    axes[1].set_ylabel("critic loss")
+    axes[1].grid(True, alpha=0.3)
+    figure.suptitle("Training status")
+    figure.tight_layout()
+    plt.show()
 
 
 def build_actor(config: RunConfig) -> Actor:
@@ -245,14 +267,6 @@ def build_plotter(config: RunConfig) -> Plotter:
     raise NotImplementedError(
         f"No plotter is registered for simulator '{config.simulator_name}'."
     )
-
-
-def should_evaluate(config: RunConfig, iteration_index: int) -> bool:
-    """Return whether evaluation should run after this training iteration."""
-    if config.evaluation_interval == 0:
-        return False
-
-    return (iteration_index + 1) % config.evaluation_interval == 0
 
 
 def _positive_int(value: str) -> int:
