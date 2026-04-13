@@ -15,13 +15,12 @@ class LineActorEncoder(ActorEncoder):
         if num_agents < 2:
             raise ValueError("At least two agents are required.")
         self.num_agents = num_agents
-        self.state_size = 1 + 2 * num_agents
+        self.state_size = 2 * num_agents
 
     def encode_state(self, local_belief: Any, agent_id: int) -> jnp.ndarray:
         """Encode one local factor-graph belief for the shared actor."""
         return jnp.concatenate(
             (
-                jnp.array([float(agent_id)]),
                 jnp.asarray(local_belief.estimate),
                 jnp.diag(jnp.asarray(local_belief.covariance)),
             )
