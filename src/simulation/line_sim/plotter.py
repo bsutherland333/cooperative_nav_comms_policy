@@ -39,12 +39,9 @@ def _plot_episode(
         raise ValueError("Either output_path must be provided or show must be True.")
     if n_sigma <= 0.0:
         raise ValueError("n_sigma must be positive.")
-    true_trajectory = np.asarray(episode.metadata["true_trajectory"], dtype=float)
-    if true_trajectory.ndim != 2:
-        raise ValueError("true_trajectory metadata must be a 2D array.")
+    true_times, true_trajectory = _true_position_series(episode)
 
     figure, axis = plt.subplots()
-    true_times = np.arange(true_trajectory.shape[0])
     num_agents = true_trajectory.shape[1]
     _validate_prior_local_belief(episode, num_agents)
 
@@ -124,6 +121,24 @@ def _plot_range_measurements(
                 label=label,
             )
             label = "_range measurement"
+
+
+def _true_position_series(episode: EpisodeResult) -> tuple[np.ndarray, np.ndarray]:
+    times: list[int] = []
+    positions: list[np.ndarray] = []
+    for step in episode.steps:
+        true_positions = np.asarray(step.true_positions, dtype=float)
+        if true_positions.ndim != 1:
+            raise ValueError("step true_positions must be a 1D array.")
+        if positions and true_positions.shape != positions[0].shape:
+            raise ValueError("step true_positions must have consistent shape.")
+        times.append(step.timestep)
+        positions.append(true_positions)
+
+    if not positions:
+        raise ValueError("episode must contain at least one step with true_positions.")
+
+    return np.array(times, dtype=int), np.vstack(positions)
 
 
 def _validate_prior_local_belief(

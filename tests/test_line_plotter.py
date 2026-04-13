@@ -45,7 +45,6 @@ def _episode_with_events(
                     covariance=prior_covariance,
                 ),
             ),
-            "true_trajectory": np.array([[0.0, 1.0], [0.2, 0.9]]),
         },
     )
 
@@ -64,6 +63,9 @@ def test_plotter_saves_figure(tmp_path: object) -> None:
     axis = figure.axes[0]
     assert figure.axes == [axis]
     assert axis.get_xlabel() == "time"
+    true_line = next(line for line in axis.lines if line.get_label() == "agent 0 true")
+    np.testing.assert_allclose(true_line.get_xdata(), np.array([0]))
+    np.testing.assert_allclose(true_line.get_ydata(), np.array([0.2]))
     assert output_path.exists()
     plt.close(figure)
 

@@ -52,7 +52,6 @@ class LineSimulation(Simulation):
             self.prior_std,
             size=self.num_agents,
         )
-        true_trajectory = [true_positions.copy()]
         estimators = tuple(
             FG(
                 num_agents=self.num_agents,
@@ -103,7 +102,6 @@ class LineSimulation(Simulation):
             next_timestep = timestep + 1
             true_positions_at_decision = true_positions.copy()
             true_positions = self._propagate_truth(true_positions)
-            true_trajectory.append(true_positions.copy())
             for estimator in estimators:
                 # Currently propagates all states, may want to change this to only propagating local state.
                 # Will need to encode age of last communication somehow, though.
@@ -139,7 +137,6 @@ class LineSimulation(Simulation):
                 "range_std": self.range_std,
                 "initial_position_scalar": self.initial_position_scalar,
                 "prior_local_belief": prior_local_belief,
-                "true_trajectory": np.array(true_trajectory, dtype=float),
             },
         )
 
