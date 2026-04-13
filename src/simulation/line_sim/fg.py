@@ -41,7 +41,7 @@ class RangeMeasurement:
 
 
 class FG:
-    """Batch GTSAM estimator for one agent's belief over the full fleet."""
+    """Incremental GTSAM estimator for one agent's belief over the full fleet."""
 
     def __init__(
         self,
@@ -66,11 +66,16 @@ class FG:
         self.range_std = range_std
         self.graph = gtsam.NonlinearFactorGraph()
         self.values = gtsam.Values()
+        self._isam = gtsam.ISAM2()
+        self._pending_graph = gtsam.NonlinearFactorGraph()
+        self._pending_values = gtsam.Values()
+        self._pending_value_keys: set[int] = set()
+        self._submitted_value_keys: set[int] = set()
         self._records: dict[FactorID, FactorRecord] = {}
 
         for agent_id, initial_position in enumerate(initial_positions):
             key = self.key(0, agent_id)
-            self.values.insert(key, float(initial_position))
+            self._insert_value(key, float(initial_position))
             factor = gtsam.PriorFactorDouble(
                 key,
                 float(initial_position),
@@ -100,7 +105,10 @@ class FG:
             previous_key = self.key(timestep - 1, agent_id)
             current_key = self.key(timestep, agent_id)
             if not self.values.exists(current_key):
-                self.values.insert(current_key, self.values.atDouble(previous_key))
+                self._insert_value(
+                    current_key,
+                    self.values.atDouble(previous_key),
+                )
 
             factor = gtsam.BetweenFactorDouble(
                 previous_key,
@@ -150,18 +158,22 @@ class FG:
 
         for key in source_graph.values.keys():
             if not self.values.exists(key):
-                self.values.insert(key, source_graph.values.atDouble(key))
+                self._insert_value(key, source_graph.values.atDouble(key))
 
         for factor_id, record in source_graph._records.items():
             if factor_id not in self._records:
                 self._add_factor(factor_id, record.factor)
 
     def optimize(self) -> None:
-        """Run a batch nonlinear solve and store the optimized values."""
-        self.values = gtsam.LevenbergMarquardtOptimizer(
-            self.graph,
-            self.values,
-        ).optimize()
+        """Submit pending graph changes to ISAM2 and store the best estimate."""
+        if not self._pending_graph.empty() or not self._pending_values.empty():
+            self._isam.update(self._pending_graph, self._pending_values)
+            self._submitted_value_keys.update(self._pending_value_keys)
+            self._pending_graph = gtsam.NonlinearFactorGraph()
+            self._pending_values = gtsam.Values()
+            self._pending_value_keys = set()
+
+        self.values = self._isam.calculateEstimate()
 
     def estimate(self, timestep: int) -> np.ndarray:
         """Return the fleet position estimate for one timestep."""
@@ -188,7 +200,16 @@ class FG:
             return
 
         self.graph.push_back(factor)
+        self._pending_graph.push_back(factor)
         self._records[factor_id] = FactorRecord(factor_id=factor_id, factor=factor)
+
+    def _insert_value(self, key: int, value: float) -> None:
+        self.values.insert(key, value)
+        if key in self._submitted_value_keys or key in self._pending_value_keys:
+            return
+
+        self._pending_values.insert(key, value)
+        self._pending_value_keys.add(key)
 
 
 def _range_factor(
