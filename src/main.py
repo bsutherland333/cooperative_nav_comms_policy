@@ -127,10 +127,10 @@ def run_training(config: RunConfig) -> None:
         show=True,
     )
     figure, axes = plt.subplots(nrows=2, sharex=True)
-    axes[0].plot(training_iterations, reward_sums)
+    axes[0].plot(training_iterations, reward_sums, linewidth=1.0)
     axes[0].set_ylabel("reward sum")
     axes[0].grid(True, alpha=0.3)
-    axes[1].plot(training_iterations, critic_losses)
+    axes[1].plot(training_iterations, critic_losses, linewidth=1.0)
     axes[1].set_xlabel("training iteration")
     axes[1].set_ylabel("critic loss")
     axes[1].grid(True, alpha=0.3)
