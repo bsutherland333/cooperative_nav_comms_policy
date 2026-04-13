@@ -4,6 +4,10 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 import jax.numpy as jnp
+import numpy as np
+
+
+POLYNOMIAL_INITIAL_WEIGHT_STD = 1e-3
 
 
 class FunctionProvider(ABC):
@@ -36,7 +40,7 @@ class PolynomialFunctionProvider(FunctionProvider):
     """Linear model over all monomial features up to a total polynomial degree."""
 
     def __init__(self, input_size: int, output_size: int, degree: int) -> None:
-        """Build zero-initialized weights for a total-degree polynomial basis."""
+        """Build small random weights for a total-degree polynomial basis."""
         if degree < 0:
             raise ValueError("degree must be nonnegative.")
 
@@ -48,7 +52,13 @@ class PolynomialFunctionProvider(FunctionProvider):
         )
         self.num_features = int(self.exponents.shape[0])
         self.parameters = {
-            "weights": jnp.zeros((self.num_features, output_size)),
+            "weights": jnp.asarray(
+                np.random.default_rng().normal(
+                    loc=0.0,
+                    scale=POLYNOMIAL_INITIAL_WEIGHT_STD,
+                    size=(self.num_features, output_size),
+                )
+            ),
         }
 
     def apply(self, parameters: Any, inputs: jnp.ndarray) -> jnp.ndarray:

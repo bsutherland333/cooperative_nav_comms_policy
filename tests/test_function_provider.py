@@ -4,7 +4,10 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from policy.function_provider import PolynomialFunctionProvider
+from policy.function_provider import (
+    POLYNOMIAL_INITIAL_WEIGHT_STD,
+    PolynomialFunctionProvider,
+)
 from tests.fakes import FixedOutputProvider
 
 
@@ -42,7 +45,11 @@ def test_polynomial_provider_builds_total_degree_basis() -> None:
         ),
     )
     assert provider.parameters["weights"].shape == (6, 3)
-    assert jnp.allclose(provider.parameters["weights"], jnp.zeros((6, 3)))
+    assert jnp.all(jnp.isfinite(provider.parameters["weights"]))
+    assert not jnp.allclose(provider.parameters["weights"], jnp.zeros((6, 3)))
+    assert jnp.max(jnp.abs(provider.parameters["weights"])) < (
+        20.0 * POLYNOMIAL_INITIAL_WEIGHT_STD
+    )
 
 
 def test_polynomial_provider_evaluates_explicit_parameters() -> None:
@@ -67,6 +74,9 @@ def test_polynomial_provider_evaluates_explicit_parameters() -> None:
 
 def test_polynomial_provider_updates_owned_weights() -> None:
     provider = PolynomialFunctionProvider(input_size=2, output_size=1, degree=1)
+    provider.parameters = {
+        "weights": jnp.zeros((provider.num_features, provider.output_size))
+    }
 
     provider.update(
         gradient={"weights": jnp.array([[1.0], [2.0], [-4.0]])},
