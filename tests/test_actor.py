@@ -88,7 +88,7 @@ def test_actor_update_delegates_to_provider() -> None:
 
     actor.update(gradient={"output": jnp.array([0.5, -1.0, 2.0])}, learning_rate=0.1)
 
-    assert jnp.allclose(actor.get_parameters()["output"], jnp.array([1.05, 1.9, 0.2]))
+    assert jnp.allclose(actor.get_parameters()["output"], jnp.array([1.1, 1.9, 0.1]))
 
 
 def test_actor_keeps_function_provider_private() -> None:

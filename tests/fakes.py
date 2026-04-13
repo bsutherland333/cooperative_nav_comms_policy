@@ -25,11 +25,6 @@ class FixedOutputProvider(FunctionProvider):
         self.last_inputs = inputs
         return parameters["output"]
 
-    def update(self, gradient: Any, learning_rate: float) -> None:
-        self.parameters = {
-            "output": self.parameters["output"] - learning_rate * gradient["output"]
-        }
-
 
 class IdentityActorEncoder(ActorEncoder):
     """Actor encoder that treats the local belief as an encoded vector."""

@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 import jax.numpy as jnp
+from jax.example_libraries import optimizers
 import numpy as np
 
 
@@ -22,6 +23,11 @@ class FunctionProvider(ABC):
 
         self.input_size = input_size
         self.output_size = output_size
+        self._optimizer_state: Any | None = None
+        self._optimizer_update: Any | None = None
+        self._optimizer_get_parameters: Any | None = None
+        self._optimizer_learning_rate: float | None = None
+        self._optimizer_step = 0
 
     def __call__(self, inputs: jnp.ndarray) -> jnp.ndarray:
         """Evaluate the parameterized function."""
@@ -31,9 +37,38 @@ class FunctionProvider(ABC):
     def apply(self, parameters: Any, inputs: jnp.ndarray) -> jnp.ndarray:
         """Evaluate the function with explicit parameters."""
 
-    @abstractmethod
     def update(self, gradient: Any, learning_rate: float) -> None:
-        """Apply one gradient-descent step to provider-owned parameters."""
+        """Apply one Adam optimizer step to provider-owned parameters."""
+        if learning_rate <= 0.0:
+            raise ValueError("learning_rate must be positive.")
+
+        self._ensure_optimizer(learning_rate)
+        if self._optimizer_update is None or self._optimizer_get_parameters is None:
+            raise RuntimeError("Optimizer must be initialized before update.")
+
+        self._optimizer_state = self._optimizer_update(
+            self._optimizer_step,
+            gradient,
+            self._optimizer_state,
+        )
+        self._optimizer_step += 1
+        self.parameters = self._optimizer_get_parameters(self._optimizer_state)
+
+    def _ensure_optimizer(self, learning_rate: float) -> None:
+        """Initialize Adam state lazily once subclass parameters exist."""
+        if self._optimizer_state is not None and (
+            self._optimizer_learning_rate == learning_rate
+        ):
+            return
+
+        init_optimizer, update_optimizer, get_parameters = optimizers.adam(
+            learning_rate
+        )
+        if self._optimizer_state is None:
+            self._optimizer_state = init_optimizer(self.parameters)
+        self._optimizer_update = update_optimizer
+        self._optimizer_get_parameters = get_parameters
+        self._optimizer_learning_rate = learning_rate
 
 
 class PolynomialFunctionProvider(FunctionProvider):
@@ -74,13 +109,6 @@ class PolynomialFunctionProvider(FunctionProvider):
 
         powered_inputs = jnp.power(inputs[jnp.newaxis, :], self.exponents)
         return jnp.prod(powered_inputs, axis=1)
-
-    def update(self, gradient: Any, learning_rate: float) -> None:
-        """Apply a gradient-descent step to the owned weights."""
-        self.parameters = {
-            "weights": self.parameters["weights"]
-            - learning_rate * gradient["weights"],
-        }
 
 
 def _total_degree_exponents(input_size: int, degree: int) -> tuple[tuple[int, ...], ...]:

@@ -95,7 +95,7 @@ def test_trainer_critic_loss_uses_discounted_reward_to_go_targets() -> None:
     assert jnp.isclose(loss, 0.8125)
 
 
-def test_trainer_update_applies_actor_ascent_and_critic_descent() -> None:
+def test_trainer_update_applies_actor_ascent_and_critic_adam_step() -> None:
     actor = _actor(jnp.array([0.0, 0.0]))
     critic = _critic()
     trainer = _trainer(actor=actor, critic=critic)
@@ -113,9 +113,9 @@ def test_trainer_update_applies_actor_ascent_and_critic_descent() -> None:
     )
     assert jnp.allclose(
         critic.get_parameters()["output"],
-        jnp.array([0.125]),
+        jnp.array([0.1]),
     )
-    assert jnp.isclose(critic_loss, 0.6640625)
+    assert jnp.isclose(critic_loss, 0.6925)
 
 
 def test_trainer_critic_uses_discounted_reward_to_go_targets() -> None:
@@ -132,7 +132,7 @@ def test_trainer_critic_uses_discounted_reward_to_go_targets() -> None:
 
     assert jnp.allclose(
         critic.get_parameters()["output"],
-        jnp.array([0.125]),
+        jnp.array([0.1]),
     )
 
 
@@ -177,7 +177,7 @@ def test_trainer_actor_bootstraps_from_next_pre_decision_beliefs() -> None:
 
     assert jnp.allclose(
         actor.get_parameters()["output"],
-        jnp.array([0.05, -0.05]),
+        jnp.array([0.1, -0.1]),
     )
 
 
