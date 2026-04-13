@@ -23,9 +23,10 @@ def test_sim_main_parses_line_defaults() -> None:
 
     assert config.simulator_name == "line"
     assert config.reward_method == RewardMethod.TRACE
-    assert config.state_encoding_method == StateEncodingMethod.MEAN_DIAGONAL
-    assert config.num_agents == 3
-    assert config.num_steps == 25
+    assert config.state_encoding_method == StateEncodingMethod.MEAN_FULL_CORRELATION
+    assert config.num_agents == 2
+    assert config.num_steps == 120
+    assert config.communication_cost == 0.03
 
 
 def test_sim_main_parses_reward() -> None:
@@ -47,6 +48,7 @@ def test_sim_main_builds_line_simulation() -> None:
         state_encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
         num_agents=2,
         num_steps=1,
+        communication_cost=0.3,
     )
     actor = sim_main.build_fake_actor(config)
 
@@ -56,6 +58,7 @@ def test_sim_main_builds_line_simulation() -> None:
     assert isinstance(simulation, LineSimulation)
     assert isinstance(simulation.reward_function, Reward)
     assert simulation.reward_function.reward_method == RewardMethod.TRACE
+    assert simulation.reward_function.communication_cost == 0.3
 
 
 def test_sim_main_fails_cleanly_for_unknown_simulator(capsys: object) -> None:
@@ -110,6 +113,7 @@ def test_run_standalone_sim_shows_plot_without_saving(
         state_encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
         num_agents=2,
         num_steps=1,
+        communication_cost=0.3,
     )
     monkeypatch.chdir(tmp_path)
 

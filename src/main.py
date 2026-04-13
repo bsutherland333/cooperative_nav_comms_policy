@@ -54,35 +54,35 @@ def parse_args(argv: Sequence[str] | None) -> RunConfig:
     )
     parser.add_argument(
         "--state-encoding",
-        default=StateEncodingMethod.MEAN_DIAGONAL.value,
+        default=StateEncodingMethod.MEAN_FULL_CORRELATION.value,
         choices=tuple(method.value for method in StateEncodingMethod),
     )
-    parser.add_argument("--function-type", default="poly")
+    parser.add_argument("--function", default="poly")
     parser.add_argument("--poly-degree", default=2, type=_nonnegative_int)
     parser.add_argument("--num-agents", default=2, type=_positive_int)
-    parser.add_argument("--num-training-iterations", default=20, type=_positive_int)
+    parser.add_argument("--num-iters", default=50, type=_positive_int)
     parser.add_argument("--num-steps", default=120, type=_positive_int)
-    parser.add_argument("--actor-learning-rate", default=1e-3, type=_positive_float)
-    parser.add_argument("--critic-learning-rate", default=1e-3, type=_positive_float)
-    parser.add_argument("--discount-factor", default=0.95, type=_unit_interval_float)
-    parser.add_argument("--entropy-coefficient", default=0.01, type=_nonnegative_float)
-    parser.add_argument("--communication-cost", default=0.03, type=_nonnegative_float)
+    parser.add_argument("--actor-rate", default=5e-3, type=_positive_float)
+    parser.add_argument("--critic-rate", default=5e-4, type=_positive_float)
+    parser.add_argument("--discount", default=0.9, type=_unit_interval_float)
+    parser.add_argument("--entropy", default=0.01, type=_nonnegative_float)
+    parser.add_argument("--comm-cost", default=0.03, type=_nonnegative_float)
     args = parser.parse_args(argv)
 
     return RunConfig(
         simulator_name=args.simulator_name,
-        function_type=args.function_type,
+        function_type=args.function,
         reward_method=RewardMethod(args.reward),
         state_encoding_method=StateEncodingMethod(args.state_encoding),
         num_agents=args.num_agents,
-        num_training_iterations=args.num_training_iterations,
+        num_training_iterations=args.num_iters,
         num_steps=args.num_steps,
         poly_degree=args.poly_degree,
-        actor_learning_rate=args.actor_learning_rate,
-        critic_learning_rate=args.critic_learning_rate,
-        discount_factor=args.discount_factor,
-        entropy_coefficient=args.entropy_coefficient,
-        communication_cost=args.communication_cost,
+        actor_learning_rate=args.actor_rate,
+        critic_learning_rate=args.critic_rate,
+        discount_factor=args.discount,
+        entropy_coefficient=args.entropy,
+        communication_cost=args.comm_cost,
     )
 
 

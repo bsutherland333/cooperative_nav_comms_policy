@@ -135,7 +135,7 @@ def test_run_training_orchestrates_training_and_status_reporting(
 
 
 def test_function_type_cli_arg_is_parsed() -> None:
-    config = main.parse_args(["--function-type", "mlp"])
+    config = main.parse_args(["--function", "mlp"])
 
     assert config.function_type == "mlp"
 
@@ -152,10 +152,10 @@ def test_state_encoding_cli_arg_is_parsed() -> None:
     assert config.state_encoding_method == StateEncodingMethod.MEAN_FULL_COVARIANCE
 
 
-def test_state_encoding_defaults_to_mean_diagonal() -> None:
+def test_state_encoding_defaults_to_mean_full_correlation() -> None:
     config = main.parse_args([])
 
-    assert config.state_encoding_method == StateEncodingMethod.MEAN_DIAGONAL
+    assert config.state_encoding_method == StateEncodingMethod.MEAN_FULL_CORRELATION
 
 
 def test_encoder_registration_uses_simulator_vehicle_state_size() -> None:
@@ -222,15 +222,15 @@ def test_num_steps_cli_arg_is_parsed() -> None:
 def test_training_hyperparameters_are_parsed() -> None:
     config = main.parse_args(
         [
-            "--actor-learning-rate",
+            "--actor-rate",
             "0.2",
-            "--critic-learning-rate",
+            "--critic-rate",
             "0.3",
-            "--discount-factor",
+            "--discount",
             "0.8",
-            "--entropy-coefficient",
+            "--entropy",
             "0.01",
-            "--communication-cost",
+            "--comm-cost",
             "0.4",
         ]
     )
@@ -256,7 +256,7 @@ def test_polynomial_degree_cli_arg_is_parsed() -> None:
 
 def test_function_type_cli_arg_rejects_polynomial_degree() -> None:
     with pytest.raises(SystemExit):
-        main.parse_args(["--function-type", "polynomial", "4"])
+        main.parse_args(["--function", "polynomial", "4"])
 
 
 def test_line_simulator_registration_uses_configured_dimensions(
