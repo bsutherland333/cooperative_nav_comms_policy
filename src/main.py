@@ -60,7 +60,7 @@ def parse_args(argv: Sequence[str] | None) -> RunConfig:
     parser.add_argument("--function", default="poly")
     parser.add_argument("--poly-degree", default=2, type=_nonnegative_int)
     parser.add_argument("--num-agents", default=2, type=_positive_int)
-    parser.add_argument("--num-iters", default=50, type=_positive_int)
+    parser.add_argument("--num-iters", default=250, type=_positive_int)
     parser.add_argument("--num-steps", default=120, type=_positive_int)
     parser.add_argument("--actor-rate", default=5e-3, type=_positive_float)
     parser.add_argument("--critic-rate", default=5e-4, type=_positive_float)
@@ -116,20 +116,23 @@ def run_training(config: RunConfig) -> None:
     training_iterations: list[int] = []
     reward_sums: list[float] = []
     critic_losses: list[float] = []
-    for iteration_index in range(config.num_training_iterations):
-        training_episode = trainer.collect_training_episode()
-        critic_loss = trainer.update_from_episode(training_episode)
+    try:
+        for iteration_index in range(config.num_training_iterations):
+            training_episode = trainer.collect_training_episode()
+            critic_loss = trainer.update_from_episode(training_episode)
 
-        training_iteration = iteration_index + 1
-        reward_sum = sum(float(step.reward) for step in training_episode.steps)
-        training_iterations.append(training_iteration)
-        reward_sums.append(reward_sum)
-        critic_losses.append(critic_loss)
-        print(
-            f"iteration={training_iteration} "
-            f"reward_sum={reward_sum:.6g} "
-            f"critic_loss={critic_loss:.6g}"
-        )
+            training_iteration = iteration_index + 1
+            reward_sum = sum(float(step.reward) for step in training_episode.steps)
+            training_iterations.append(training_iteration)
+            reward_sums.append(reward_sum)
+            critic_losses.append(critic_loss)
+            print(
+                f"iteration={training_iteration} "
+                f"reward_sum={reward_sum:.6g} "
+                f"critic_loss={critic_loss:.6g}"
+            )
+    except KeyboardInterrupt:
+        print("Training interrupted; running final evaluation.", file=sys.stderr)
 
     final_simulation = simulation_type(actor)
     final_episode = final_simulation.run(exploration=False)

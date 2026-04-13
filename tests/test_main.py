@@ -55,6 +55,15 @@ class RecordingTrainer:
         return 1.25
 
 
+class InterruptingTrainer(RecordingTrainer):
+    """Trainer replacement that simulates Ctrl+C during training collection."""
+
+    def collect_training_episode(self) -> EpisodeResult:
+        if self.training_episode_count == 1:
+            raise KeyboardInterrupt()
+        return super().collect_training_episode()
+
+
 def test_main_fails_cleanly_when_simulator_is_unregistered(capsys: Any) -> None:
     exit_code = main.main(["--simulator", "missing"])
 
@@ -131,6 +140,58 @@ def test_run_training_orchestrates_training_and_status_reporting(
     final_plotter = FakePlotter.instances[0]
     assert final_plotter.plot_calls[0]["n_sigma"] == 2.0
     assert final_plotter.plot_calls[0]["output_path"] is None
+    assert final_plotter.plot_calls[0]["show"] is True
+
+
+def test_run_training_plots_final_evaluation_after_keyboard_interrupt(
+    monkeypatch: Any,
+    capsys: Any,
+) -> None:
+    RecordingTrainer.instances = []
+    FakePlotter.instances = []
+    FakeSimulation.instances = []
+    show_calls: list[bool] = []
+    config = main.RunConfig(
+        simulator_name="line",
+        function_type="fake_function",
+        reward_method=RewardMethod.TRACE,
+        state_encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
+        num_agents=3,
+        num_training_iterations=3,
+        num_steps=60,
+        poly_degree=2,
+        actor_learning_rate=0.1,
+        critic_learning_rate=0.2,
+        discount_factor=0.9,
+        entropy_coefficient=0.01,
+        communication_cost=0.3,
+    )
+
+    monkeypatch.setattr(
+        main,
+        "build_function_provider",
+        _fake_function_provider,
+    )
+    monkeypatch.setattr(main, "build_simulation_type", lambda config: FakeSimulation)
+    monkeypatch.setattr(main, "build_plotter", lambda config: FakePlotter())
+    monkeypatch.setattr(main, "Trainer", InterruptingTrainer)
+    monkeypatch.setattr(main.plt, "show", lambda: show_calls.append(True))
+
+    main.run_training(config)
+
+    captured = capsys.readouterr()
+    trainer = RecordingTrainer.instances[0]
+    assert trainer.training_episode_count == 1
+    assert trainer.update_count == 1
+    assert "Training interrupted; running final evaluation." in captured.err
+    assert "iteration=1 reward_sum=1 critic_loss=1.25" in captured.out
+    assert show_calls == [True]
+
+    assert len(FakeSimulation.instances) == 1
+    final_plotter = FakePlotter.instances[0]
+    assert final_plotter.plot_calls[0]["episode"].metadata == {
+        "exploration": False,
+    }
     assert final_plotter.plot_calls[0]["show"] is True
 
 

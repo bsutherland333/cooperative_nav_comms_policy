@@ -26,7 +26,7 @@ from simulation.line_sim.sim import LineSimulation
 
 FAKE_POLICY_NO_COMMUNICATION_BIAS = 4.0
 PLOT_N_SIGMA = 2.0
-STANDALONE_COMMUNICATION_COST = 0.01
+DEFAULT_COMMUNICATION_COST = 0.03
 
 
 @dataclass(frozen=True)
