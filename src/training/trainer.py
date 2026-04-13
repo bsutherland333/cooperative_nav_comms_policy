@@ -57,18 +57,10 @@ class Trainer:
         if not episode.steps:
             return
 
-        decision_global_states = tuple(
+        global_states = tuple(
             jnp.asarray(
                 self.critic.critic_encoder.encode_state(
-                    step.decision_local_beliefs
-                )
-            )
-            for step in episode.steps
-        )
-        updated_global_states = tuple(
-            jnp.asarray(
-                self.critic.critic_encoder.encode_state(
-                    step.updated_local_beliefs
+                    step.local_beliefs
                 )
             )
             for step in episode.steps
@@ -82,7 +74,7 @@ class Trainer:
                     )
                 )
                 for agent_id, local_belief in enumerate(
-                    step.decision_local_beliefs
+                    step.local_beliefs
                 )
             )
             for step in episode.steps
@@ -100,8 +92,7 @@ class Trainer:
             lambda parameters: self._actor_objective(
                 actor_parameters=parameters,
                 critic_parameters=critic_parameters,
-                decision_global_states=decision_global_states,
-                updated_global_states=updated_global_states,
+                global_states=global_states,
                 local_actor_states=local_actor_states,
                 action_vectors=action_vectors,
                 rewards=rewards,
@@ -110,7 +101,7 @@ class Trainer:
         critic_loss_gradient = jax.grad(
             lambda parameters: self._critic_loss(
                 critic_parameters=parameters,
-                decision_global_states=decision_global_states,
+                global_states=global_states,
                 returns=returns,
             )
         )(critic_parameters)
@@ -131,26 +122,25 @@ class Trainer:
         self,
         actor_parameters: Any,
         critic_parameters: Any,
-        decision_global_states: tuple[jnp.ndarray, ...],
-        updated_global_states: tuple[jnp.ndarray, ...],
+        global_states: tuple[jnp.ndarray, ...],
         local_actor_states: tuple[tuple[jnp.ndarray, ...], ...],
         action_vectors: tuple[tuple[int, ...], ...],
         rewards: tuple[float, ...],
     ) -> jnp.ndarray:
         """Return the rollout policy-gradient objective to maximize."""
         objective = jnp.array(0.0)
-        for step_index, step_actor_states in enumerate(local_actor_states):
+        if len(global_states) < 2:
+            return objective
+
+        for step_index, step_actor_states in enumerate(local_actor_states[:-1]):
             current_value = self._critic_value(
                 critic_parameters,
-                decision_global_states[step_index],
+                global_states[step_index],
             )
-            if step_index + 1 == len(decision_global_states):
-                next_value = jnp.array(0.0)
-            else:
-                next_value = self._critic_value(
-                    critic_parameters,
-                    updated_global_states[step_index],
-                )
+            next_value = self._critic_value(
+                critic_parameters,
+                global_states[step_index + 1],
+            )
             advantage = jax.lax.stop_gradient(
                 rewards[step_index]
                 + self.discount_factor * next_value
@@ -176,23 +166,23 @@ class Trainer:
                 * step_log_probability
             )
 
-        return objective / len(decision_global_states)
+        return objective / (len(global_states) - 1)
 
     def _critic_loss(
         self,
         critic_parameters: Any,
-        decision_global_states: tuple[jnp.ndarray, ...],
+        global_states: tuple[jnp.ndarray, ...],
         returns: jnp.ndarray,
     ) -> jnp.ndarray:
         """Return the mean squared reward-to-go value loss."""
         loss = jnp.array(0.0)
-        for step_index, global_state in enumerate(decision_global_states):
+        for step_index, global_state in enumerate(global_states):
             residual = (
                 self._critic_value(critic_parameters, global_state)
                 - returns[step_index]
             )
             loss = loss + 0.5 * residual**2
-        return loss / len(decision_global_states)
+        return loss / len(global_states)
 
     def _critic_value(self, parameters: Any, global_state: jnp.ndarray) -> jnp.ndarray:
         """Evaluate the centralized critic with explicit parameters."""

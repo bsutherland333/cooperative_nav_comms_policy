@@ -40,10 +40,9 @@ class Simulation(ABC):
     def run(self, exploration: bool) -> EpisodeResult:
         """Run one episode and return the training/evaluation rollout.
 
-        Implementations should sample actions from decision-time local beliefs,
-        store those beliefs in each SimulationStep, and compute scalar rewards
-        with the configured reward function. When exploration is false, actors
-        should be queried in evaluation mode.
+        Implementations should sample actions from the stored local beliefs and
+        compute scalar rewards with the configured reward function. When
+        exploration is false, actors should be queried in evaluation mode.
         """
 
 

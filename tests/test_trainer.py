@@ -98,13 +98,21 @@ def test_trainer_update_applies_actor_ascent_and_critic_descent() -> None:
     critic = _critic()
     trainer = _trainer(actor=actor, critic=critic)
 
-    trainer.update_from_episode(_episode(rewards=(1.0,), action_vectors=((1, 1),)))
+    trainer.update_from_episode(
+        _episode(
+            rewards=(1.0, 1.0),
+            action_vectors=((1, 1), (1, 1)),
+        )
+    )
 
     assert jnp.allclose(
         actor.function_provider.parameters["output"],
         jnp.array([-0.1, 0.1]),
     )
-    assert jnp.allclose(critic.function_provider.parameters["output"], jnp.array([0.1]))
+    assert jnp.allclose(
+        critic.function_provider.parameters["output"],
+        jnp.array([0.125]),
+    )
 
 
 def test_trainer_critic_uses_discounted_reward_to_go_targets() -> None:
@@ -148,7 +156,7 @@ def test_trainer_actor_bootstraps_nonterminal_td_advantages() -> None:
     )
 
 
-def test_trainer_actor_bootstraps_from_updated_beliefs() -> None:
+def test_trainer_actor_bootstraps_from_next_pre_decision_beliefs() -> None:
     actor = _actor(jnp.array([0.0, 0.0]))
     critic = Critic(
         state_size=4,
@@ -196,13 +204,9 @@ def _episode(
         steps.append(
             SimulationStep(
                 timestep=step_index + 1,
-                decision_local_beliefs=(
-                    jnp.array([1.0, 0.0]),
-                    jnp.array([0.0, 1.0]),
-                ),
-                updated_local_beliefs=(
-                    jnp.array([2.0, 0.0]),
-                    jnp.array([0.0, 2.0]),
+                local_beliefs=(
+                    jnp.array([1.0 + 0.5 * step_index, 0.0]),
+                    jnp.array([0.0, 1.0 + 0.5 * step_index]),
                 ),
                 action_vector=action_vector,
                 communication_events=(),

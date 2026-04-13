@@ -37,18 +37,16 @@ def test_line_sim_uses_noisy_truth_and_nominal_priors() -> None:
 
     true_trajectory = np.asarray(episode.metadata["true_trajectory"])
     nominal_positions = np.arange(3, dtype=float) * sim.initial_position_scalar
-    assert episode.steps[0].timestep == 1
+    assert episode.steps[0].timestep == 0
     assert isinstance(episode.metadata["true_trajectory"], np.ndarray)
     assert isinstance(
-        episode.steps[0].decision_local_beliefs[0].estimate,
+        episode.steps[0].local_beliefs[0].estimate,
         np.ndarray,
     )
     assert isinstance(
-        episode.steps[0].decision_local_beliefs[0].covariance,
+        episode.steps[0].local_beliefs[0].covariance,
         np.ndarray,
     )
-    assert isinstance(episode.steps[0].updated_local_beliefs[0].estimate, np.ndarray)
-    assert isinstance(episode.steps[0].updated_local_beliefs[0].covariance, np.ndarray)
     assert isinstance(episode.metadata["prior_local_belief"][0], LocalBelief)
     assert episode.metadata["initial_position_scalar"] == sim.initial_position_scalar
     assert "actor_probabilities" not in episode.steps[0].extra
@@ -67,13 +65,13 @@ def test_line_sim_uses_noisy_truth_and_nominal_priors() -> None:
         atol=1e-6,
     )
     np.testing.assert_allclose(
-        np.asarray(episode.steps[0].decision_local_beliefs[0].estimate),
+        np.asarray(episode.steps[0].local_beliefs[0].estimate),
         nominal_positions,
         atol=1e-6,
     )
     np.testing.assert_allclose(
         np.asarray(episode.steps[0].true_positions),
-        true_trajectory[1],
+        true_trajectory[0],
     )
 
 
@@ -91,7 +89,7 @@ def test_line_sim_merges_duplicate_communication_requests() -> None:
     assert sorted(episode.steps[0].communication_events) == [(0, 1), (0, 2)]
     assert len(episode.steps[0].communication_events) == 2
     assert episode.steps[0].reward < -1_000.0
-    assert episode.steps[0].reward > -2_000.0
+    assert episode.steps[0].reward > -2_500.0
 
 
 def test_line_sim_records_the_decision_time_beliefs_used_by_actor() -> None:
@@ -108,7 +106,7 @@ def test_line_sim_records_the_decision_time_beliefs_used_by_actor() -> None:
     provider = actor.function_provider
     actor_encoder = actor.actor_encoder
     expected_last_actor_input = actor_encoder.encode_state(
-        local_belief=episode.steps[0].decision_local_beliefs[1],
+        local_belief=episode.steps[0].local_beliefs[1],
         agent_id=1,
     )
     np.testing.assert_allclose(
@@ -119,18 +117,18 @@ def test_line_sim_records_the_decision_time_beliefs_used_by_actor() -> None:
 
 def test_line_reward_function_rewards_trace_reduction_and_unique_events() -> None:
     reward_function = TraceReward(communication_cost=2.0)
-    decision_local_beliefs = (
+    current_local_beliefs = (
         LocalBelief(estimate=np.array([0.0, 1.0]), covariance=np.eye(2) * 3.0),
         LocalBelief(estimate=np.array([1.0, 2.0]), covariance=np.eye(2) * 2.0),
     )
-    updated_local_beliefs = (
+    next_local_beliefs = (
         LocalBelief(estimate=np.array([0.0, 1.0]), covariance=np.eye(2)),
         LocalBelief(estimate=np.array([1.0, 2.0]), covariance=np.eye(2)),
     )
 
     reward = reward_function(
-        decision_local_beliefs=decision_local_beliefs,
-        updated_local_beliefs=updated_local_beliefs,
+        current_local_beliefs=current_local_beliefs,
+        next_local_beliefs=next_local_beliefs,
         communication_events=((0, 1),),
     )
 
@@ -144,9 +142,9 @@ def test_line_reward_function_requires_matching_belief_counts() -> None:
         covariance=np.eye(2),
     )
 
-    with pytest.raises(ValueError, match="matching decision and updated"):
+    with pytest.raises(ValueError, match="matching current and next"):
         reward_function(
-            decision_local_beliefs=(local_belief,),
-            updated_local_beliefs=(local_belief, local_belief),
+            current_local_beliefs=(local_belief,),
+            next_local_beliefs=(local_belief, local_belief),
             communication_events=(),
         )

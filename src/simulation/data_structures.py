@@ -32,16 +32,13 @@ class LocalBelief:
 class SimulationStep:
     """One timestep of simulator output collected while following a policy.
 
-    decision_local_beliefs stores the per-agent beliefs used to choose the
-    action_vector. updated_local_beliefs stores the post-action/post-update
-    beliefs used as the critic bootstrap state. true_positions stores the
-    simulator's ground-truth per-agent state at this timestep; extra is for
-    simulator-specific diagnostics.
+    local_beliefs stores the per-agent beliefs used to choose the action_vector.
+    true_positions stores the simulator's ground-truth per-agent state at this
+    timestep; extra is for simulator-specific diagnostics.
     """
 
     timestep: int
-    decision_local_beliefs: tuple[LocalBelief, ...]
-    updated_local_beliefs: tuple[LocalBelief, ...]
+    local_beliefs: tuple[LocalBelief, ...]
     action_vector: tuple[int, ...]
     communication_events: tuple[tuple[int, int], ...]
     reward: float
@@ -52,13 +49,9 @@ class SimulationStep:
         """Validate per-agent simulator records."""
         if self.timestep < 0:
             raise ValueError("timestep must be nonnegative.")
-        if len(self.decision_local_beliefs) != len(self.action_vector):
+        if len(self.local_beliefs) != len(self.action_vector):
             raise ValueError(
-                "action_vector must contain one action per decision local belief."
-            )
-        if len(self.updated_local_beliefs) != len(self.decision_local_beliefs):
-            raise ValueError(
-                "updated_local_beliefs must contain one belief per decision local belief."
+                "action_vector must contain one action per local belief."
             )
         try:
             reward = float(self.reward)

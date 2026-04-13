@@ -12,8 +12,8 @@ class RewardFunction(ABC):
     @abstractmethod
     def __call__(
         self,
-        decision_local_beliefs: Sequence[Any],
-        updated_local_beliefs: Sequence[Any],
+        current_local_beliefs: Sequence[Any],
+        next_local_beliefs: Sequence[Any],
         communication_events: tuple[tuple[int, int], ...],
     ) -> float:
         """Return the reward for one transition and its communication events."""
@@ -30,24 +30,24 @@ class TraceReward(RewardFunction):
 
     def __call__(
         self,
-        decision_local_beliefs: Sequence[Any],
-        updated_local_beliefs: Sequence[Any],
+        current_local_beliefs: Sequence[Any],
+        next_local_beliefs: Sequence[Any],
         communication_events: tuple[tuple[int, int], ...],
     ) -> float:
         """Return trace reduction minus the cost of successful communications."""
-        if len(decision_local_beliefs) != len(updated_local_beliefs):
-            raise ValueError("Expected matching decision and updated local beliefs.")
+        if len(current_local_beliefs) != len(next_local_beliefs):
+            raise ValueError("Expected matching current and next local beliefs.")
 
-        decision_uncertainty = sum(
+        current_uncertainty = sum(
             float(np.trace(local_belief.covariance))
-            for local_belief in decision_local_beliefs
+            for local_belief in current_local_beliefs
         )
-        updated_uncertainty = sum(
+        next_uncertainty = sum(
             float(np.trace(local_belief.covariance))
-            for local_belief in updated_local_beliefs
+            for local_belief in next_local_beliefs
         )
         return (
-            decision_uncertainty
-            - updated_uncertainty
+            current_uncertainty
+            - next_uncertainty
             - self.communication_cost * len(communication_events)
         )

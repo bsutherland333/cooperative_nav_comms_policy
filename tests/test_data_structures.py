@@ -11,11 +11,10 @@ from simulation.data_structures import (
 
 
 def test_simulation_step_requires_action_per_agent() -> None:
-    with pytest.raises(ValueError, match="one action per decision local belief"):
+    with pytest.raises(ValueError, match="one action per local belief"):
         SimulationStep(
             timestep=1,
-            decision_local_beliefs=("agent-0", "agent-1"),
-            updated_local_beliefs=("agent-0-updated", "agent-1-updated"),
+            local_beliefs=("agent-0", "agent-1"),
             action_vector=(0,),
             communication_events=(),
             reward=0.0,
@@ -39,8 +38,7 @@ def test_local_belief_copies_estimate_and_covariance() -> None:
 def test_episode_result_from_steps_stores_simulation_outputs() -> None:
     step = SimulationStep(
         timestep=3,
-        decision_local_beliefs=("agent-0", "agent-1"),
-        updated_local_beliefs=("agent-0-updated", "agent-1-updated"),
+        local_beliefs=("agent-0", "agent-1"),
         action_vector=(1, 0),
         communication_events=((0, 1),),
         reward=-1.25,
@@ -58,8 +56,7 @@ def test_simulation_step_requires_nonnegative_timestep() -> None:
     with pytest.raises(ValueError, match="timestep must be nonnegative"):
         SimulationStep(
             timestep=-1,
-            decision_local_beliefs=("agent-0",),
-            updated_local_beliefs=("agent-0-updated",),
+            local_beliefs=("agent-0",),
             action_vector=(0,),
             communication_events=(),
             reward=0.0,
@@ -72,8 +69,7 @@ def test_simulation_step_requires_finite_reward() -> None:
     with pytest.raises(ValueError, match="reward must be a finite scalar"):
         SimulationStep(
             timestep=1,
-            decision_local_beliefs=("agent-0",),
-            updated_local_beliefs=("agent-0-updated",),
+            local_beliefs=("agent-0",),
             action_vector=(0,),
             communication_events=(),
             reward=float("nan"),
@@ -81,16 +77,3 @@ def test_simulation_step_requires_finite_reward() -> None:
             extra={},
         )
 
-
-def test_simulation_step_requires_updated_belief_per_decision_belief() -> None:
-    with pytest.raises(ValueError, match="one belief per decision local belief"):
-        SimulationStep(
-            timestep=1,
-            decision_local_beliefs=("agent-0", "agent-1"),
-            updated_local_beliefs=("agent-0-updated",),
-            action_vector=(0, 0),
-            communication_events=(),
-            reward=0.0,
-            true_positions=("true-0", "true-1"),
-            extra={},
-        )

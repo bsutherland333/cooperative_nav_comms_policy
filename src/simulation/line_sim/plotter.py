@@ -46,7 +46,7 @@ def _plot_episode(
     figure, axis = plt.subplots()
     true_times = np.arange(true_trajectory.shape[0])
     num_agents = true_trajectory.shape[1]
-    prior_local_belief = _prior_local_belief(episode, num_agents)
+    _validate_prior_local_belief(episode, num_agents)
 
     for agent_id in range(num_agents):
         color = f"C{agent_id}"
@@ -59,7 +59,6 @@ def _plot_episode(
         )
         estimate_times, estimates, variances = _self_belief_series(
             episode=episode,
-            prior_local_belief=prior_local_belief,
             agent_id=agent_id,
         )
         if estimate_times.size == 0:
@@ -108,11 +107,11 @@ def _plot_range_measurements(
 
         for first_agent_id, second_agent_id in step.communication_events:
             first_estimate, _ = _self_belief_values(
-                step.updated_local_beliefs[first_agent_id],
+                step.local_beliefs[first_agent_id],
                 first_agent_id,
             )
             second_estimate, _ = _self_belief_values(
-                step.updated_local_beliefs[second_agent_id],
+                step.local_beliefs[second_agent_id],
                 second_agent_id,
             )
             axis.plot(
@@ -127,37 +126,29 @@ def _plot_range_measurements(
             label = "_range measurement"
 
 
-def _prior_local_belief(
+def _validate_prior_local_belief(
     episode: EpisodeResult,
     num_agents: int,
-) -> tuple[object, ...] | None:
+) -> None:
     prior_local_belief = episode.metadata.get("prior_local_belief")
     if prior_local_belief is None:
-        return None
+        return
     if len(prior_local_belief) != num_agents:
         raise ValueError("prior_local_belief metadata must contain one belief per agent.")
-    return tuple(prior_local_belief)
 
 
 def _self_belief_series(
     episode: EpisodeResult,
-    prior_local_belief: tuple[object, ...] | None,
     agent_id: int,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     times: list[int] = []
     estimates: list[float] = []
     variances: list[float] = []
 
-    if prior_local_belief is not None:
-        times.append(0)
-        estimate, variance = _self_belief_values(prior_local_belief[agent_id], agent_id)
-        estimates.append(estimate)
-        variances.append(variance)
-
     for step in episode.steps:
         times.append(step.timestep)
         estimate, variance = _self_belief_values(
-            step.updated_local_beliefs[agent_id],
+            step.local_beliefs[agent_id],
             agent_id,
         )
         estimates.append(estimate)

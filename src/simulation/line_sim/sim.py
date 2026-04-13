@@ -64,18 +64,13 @@ class LineSimulation(Simulation):
 
         steps: list[SimulationStep] = []
         range_measurement_count = 0
-        for timestep in range(1, self.num_steps + 1):
-            # Currently propagates all states, may want to change this to only propagating local state.
-            # Will need to encode age of last communication somehow, though.
-            true_positions = self._propagate_truth(true_positions)
-            true_trajectory.append(true_positions.copy())
-            for estimator in estimators:
-                estimator.add_propagation_step(timestep)
-                estimator.optimize()
-
-            decision_local_beliefs = _local_beliefs(estimators, timestep)
+        for timestep in range(self.num_steps):
+            if timestep == 0:
+                local_beliefs = prior_local_belief
+            else:
+                local_beliefs = _local_beliefs(estimators, timestep)
             decisions = self._sample_actions(
-                decision_local_beliefs=decision_local_beliefs,
+                local_beliefs=local_beliefs,
                 exploration=exploration,
             )
             communication_events = self._communication_events(decisions)
@@ -107,20 +102,29 @@ class LineSimulation(Simulation):
                 second_estimator.optimize()
                 range_measurement_count += 1
 
-            updated_local_beliefs = _local_beliefs(estimators, timestep)
+            next_timestep = timestep + 1
+            true_positions_at_decision = true_positions.copy()
+            true_positions = self._propagate_truth(true_positions)
+            true_trajectory.append(true_positions.copy())
+            for estimator in estimators:
+                # Currently propagates all states, may want to change this to only propagating local state.
+                # Will need to encode age of last communication somehow, though.
+                estimator.add_propagation_step(next_timestep)
+                estimator.optimize()
+
+            next_local_beliefs = _local_beliefs(estimators, next_timestep)
             steps.append(
                 SimulationStep(
                     timestep=timestep,
-                    decision_local_beliefs=decision_local_beliefs,
-                    updated_local_beliefs=updated_local_beliefs,
+                    local_beliefs=local_beliefs,
                     action_vector=tuple(decision.selection for decision in decisions),
                     communication_events=communication_events,
                     reward=self.reward_function(
-                        decision_local_beliefs=decision_local_beliefs,
-                        updated_local_beliefs=updated_local_beliefs,
+                        current_local_beliefs=local_beliefs,
+                        next_local_beliefs=next_local_beliefs,
                         communication_events=communication_events,
                     ),
-                    true_positions=true_positions.copy(),
+                    true_positions=true_positions_at_decision,
                     extra={},
                 )
             )
@@ -150,12 +154,12 @@ class LineSimulation(Simulation):
 
     def _sample_actions(
         self,
-        decision_local_beliefs: tuple[LocalBelief, ...],
+        local_beliefs: tuple[LocalBelief, ...],
         exploration: bool,
     ) -> tuple[ActorDecision, ...]:
         """Sample one communication action per local estimator."""
         decisions: list[ActorDecision] = []
-        for agent_id, local_belief in enumerate(decision_local_beliefs):
+        for agent_id, local_belief in enumerate(local_beliefs):
             decisions.append(
                 self.actor.get_action(
                     local_belief=local_belief,

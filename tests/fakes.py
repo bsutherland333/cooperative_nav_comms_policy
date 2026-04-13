@@ -51,11 +51,11 @@ class ZeroRewardFunction(RewardFunction):
 
     def __call__(
         self,
-        decision_local_beliefs: Sequence[Any],
-        updated_local_beliefs: Sequence[Any],
+        current_local_beliefs: Sequence[Any],
+        next_local_beliefs: Sequence[Any],
         communication_events: tuple[tuple[int, int], ...],
     ) -> float:
-        del decision_local_beliefs, updated_local_beliefs, communication_events
+        del current_local_beliefs, next_local_beliefs, communication_events
         return 0.0
 
 
