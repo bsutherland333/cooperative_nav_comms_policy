@@ -7,8 +7,7 @@ import sys
 
 from policy.actor import Actor
 from policy.critic import Critic
-from policy.function_provider import FunctionProvider
-from policy.polynomial_function_provider import PolynomialFunctionProvider
+from policy.function_provider import FunctionProvider, PolynomialFunctionProvider
 from policy.state_encoding import ActorEncoder, CriticEncoder
 from simulation.base import Plotter
 from simulation.rewards import RewardFunction, TraceReward

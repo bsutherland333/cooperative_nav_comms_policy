@@ -4,7 +4,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from policy.polynomial_function_provider import PolynomialFunctionProvider
+from policy.function_provider import PolynomialFunctionProvider
 from tests.fakes import FixedOutputProvider
 
 
