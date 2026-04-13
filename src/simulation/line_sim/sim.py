@@ -5,8 +5,8 @@ import numpy as np
 from policy.actions import selection_to_partner
 from policy.actor import Actor, ActorDecision
 from simulation.base import Simulation
-from simulation.rewards import RewardFunction
 from simulation.data_structures import EpisodeResult, LocalBelief, SimulationStep
+from simulation.rewards import Reward
 from simulation.line_sim.fg import FG
 
 
@@ -27,7 +27,7 @@ class LineSimulation(Simulation):
         actor: Actor,
         num_agents: int,
         num_steps: int,
-        reward_function: RewardFunction,
+        reward_function: Reward,
     ) -> None:
         """Store simulator parameters and random generators."""
         super().__init__(

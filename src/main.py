@@ -11,7 +11,7 @@ from policy.actor import Actor
 from policy.critic import Critic
 from policy.function_provider import FunctionProvider, PolynomialFunctionProvider
 from simulation.base import Plotter
-from simulation.rewards import RewardFunction, TraceReward
+from simulation.rewards import Reward, RewardMethod
 from simulation.state_encoding import (
     ActorEncoder,
     CriticEncoder,
@@ -28,7 +28,7 @@ class RunConfig:
 
     simulator_name: str
     function_type: str
-    reward_function_name: str
+    reward_method: RewardMethod
     state_encoding_method: StateEncodingMethod
     num_agents: int
     num_training_iterations: int
@@ -47,14 +47,18 @@ def parse_args(argv: Sequence[str] | None) -> RunConfig:
         description="Train a cooperative localization communication policy."
     )
     parser.add_argument("--simulator", default="line", dest="simulator_name")
-    parser.add_argument("--reward-function", default="trace")
+    parser.add_argument(
+        "--reward",
+        default=RewardMethod.TRACE.value,
+        choices=tuple(method.value for method in RewardMethod),
+    )
     parser.add_argument(
         "--state-encoding",
         default=StateEncodingMethod.MEAN_DIAGONAL.value,
         choices=tuple(method.value for method in StateEncodingMethod),
     )
     parser.add_argument("--function-type", default="poly")
-    parser.add_argument("--poly_degree", default=2, type=_nonnegative_int)
+    parser.add_argument("--poly-degree", default=2, type=_nonnegative_int)
     parser.add_argument("--num-agents", default=2, type=_positive_int)
     parser.add_argument("--num-training-iterations", default=20, type=_positive_int)
     parser.add_argument("--num-steps", default=120, type=_positive_int)
@@ -68,7 +72,7 @@ def parse_args(argv: Sequence[str] | None) -> RunConfig:
     return RunConfig(
         simulator_name=args.simulator_name,
         function_type=args.function_type,
-        reward_function_name=args.reward_function,
+        reward_method=RewardMethod(args.reward),
         state_encoding_method=StateEncodingMethod(args.state_encoding),
         num_agents=args.num_agents,
         num_training_iterations=args.num_training_iterations,
@@ -235,7 +239,10 @@ def _vehicle_state_size(config: RunConfig) -> int:
 def build_simulation_type(config: RunConfig) -> SimulationType:
     """Select the concrete simulator class."""
     if config.simulator_name == "line":
-        reward_function = build_reward_function(config)
+        reward_function = Reward(
+            reward_method=config.reward_method,
+            communication_cost=config.communication_cost,
+        )
 
         class ConfiguredLineSimulation(LineSimulation):
             """Line simulation bound to the requested runtime dimensions."""
@@ -252,16 +259,6 @@ def build_simulation_type(config: RunConfig) -> SimulationType:
 
     raise NotImplementedError(
         f"No simulator is registered for '{config.simulator_name}'."
-    )
-
-
-def build_reward_function(config: RunConfig) -> RewardFunction:
-    """Create the concrete reward function selected by name."""
-    if config.reward_function_name == "trace":
-        return TraceReward(communication_cost=config.communication_cost)
-
-    raise NotImplementedError(
-        f"No reward function '{config.reward_function_name}' is registered."
     )
 
 

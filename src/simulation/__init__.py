@@ -6,7 +6,7 @@ from simulation.data_structures import (
     LocalBelief,
     SimulationStep,
 )
-from simulation.rewards import RewardFunction, TraceReward
+from simulation.rewards import Reward, RewardMethod
 from simulation.state_encoding import (
     ActorEncoder,
     CriticEncoder,
@@ -19,9 +19,9 @@ __all__ = [
     "EpisodeResult",
     "LocalBelief",
     "Plotter",
-    "RewardFunction",
+    "Reward",
+    "RewardMethod",
     "Simulation",
     "SimulationStep",
     "StateEncodingMethod",
-    "TraceReward",
 ]

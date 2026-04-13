@@ -18,7 +18,7 @@ import jax.numpy as jnp
 from policy.actor import Actor
 from policy.function_provider import FunctionProvider
 from simulation.base import Plotter, Simulation
-from simulation.rewards import TraceReward
+from simulation.rewards import Reward, RewardMethod
 from simulation.state_encoding import ActorEncoder, StateEncodingMethod
 from simulation.line_sim.plotter import LinePlotter
 from simulation.line_sim.sim import LineSimulation
@@ -34,7 +34,7 @@ class StandaloneSimConfig:
     """Runtime configuration for standalone simulator verification."""
 
     simulator_name: str
-    reward_function_name: str
+    reward_method: RewardMethod
     state_encoding_method: StateEncodingMethod
     num_agents: int
     num_steps: int
@@ -59,7 +59,11 @@ def parse_args(argv: Sequence[str] | None) -> StandaloneSimConfig:
     """Parse CLI arguments for a standalone simulator run."""
     parser = ArgumentParser(description="Run a simulator without training.")
     parser.add_argument("--simulator", default="line", dest="simulator_name")
-    parser.add_argument("--reward-function", default="trace")
+    parser.add_argument(
+        "--reward",
+        default=RewardMethod.TRACE.value,
+        choices=tuple(method.value for method in RewardMethod),
+    )
     parser.add_argument(
         "--state-encoding",
         default=StateEncodingMethod.MEAN_DIAGONAL.value,
@@ -71,7 +75,7 @@ def parse_args(argv: Sequence[str] | None) -> StandaloneSimConfig:
 
     return StandaloneSimConfig(
         simulator_name=args.simulator_name,
-        reward_function_name=args.reward_function,
+        reward_method=RewardMethod(args.reward),
         state_encoding_method=StateEncodingMethod(args.state_encoding),
         num_agents=args.num_agents,
         num_steps=args.num_steps,
@@ -139,23 +143,14 @@ def build_simulation(config: StandaloneSimConfig, actor: Actor) -> Simulation:
             actor=actor,
             num_agents=config.num_agents,
             num_steps=config.num_steps,
-            reward_function=build_reward_function(config),
+            reward_function=Reward(
+                reward_method=config.reward_method,
+                communication_cost=STANDALONE_COMMUNICATION_COST,
+            ),
         )
 
     raise NotImplementedError(
         f"No standalone simulator is registered for '{config.simulator_name}'."
-    )
-
-
-def build_reward_function(config: StandaloneSimConfig) -> TraceReward:
-    """Create the requested standalone reward function."""
-    if config.reward_function_name == "trace":
-        return TraceReward(
-            communication_cost=STANDALONE_COMMUNICATION_COST
-        )
-
-    raise NotImplementedError(
-        f"No standalone reward function '{config.reward_function_name}' is registered."
     )
 
 

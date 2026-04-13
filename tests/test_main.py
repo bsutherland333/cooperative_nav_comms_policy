@@ -10,7 +10,7 @@ from policy.function_provider import PolynomialFunctionProvider
 from simulation.line_sim.plotter import LinePlotter
 from simulation.line_sim.sim import LineSimulation
 from simulation.data_structures import EpisodeResult, SimulationStep
-from simulation.rewards import TraceReward
+from simulation.rewards import Reward, RewardMethod
 from simulation.state_encoding import (
     ActorEncoder,
     CriticEncoder,
@@ -66,11 +66,11 @@ def test_main_fails_cleanly_when_simulator_is_unregistered(capsys: Any) -> None:
 def test_main_fails_cleanly_when_reward_function_is_unregistered(
     capsys: Any,
 ) -> None:
-    exit_code = main.main(["--reward-function", "missing"])
+    with pytest.raises(SystemExit):
+        main.main(["--reward", "missing"])
 
     captured = capsys.readouterr()
-    assert exit_code == 1
-    assert "No reward function 'missing' is registered" in captured.err
+    assert "invalid choice: 'missing'" in captured.err
 
 
 def test_run_training_orchestrates_training_and_status_reporting(
@@ -84,7 +84,7 @@ def test_run_training_orchestrates_training_and_status_reporting(
     config = main.RunConfig(
         simulator_name="line",
         function_type="fake_function",
-        reward_function_name="fake_reward",
+        reward_method=RewardMethod.TRACE,
         state_encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
         num_agents=3,
         num_training_iterations=3,
@@ -140,10 +140,10 @@ def test_function_type_cli_arg_is_parsed() -> None:
     assert config.function_type == "mlp"
 
 
-def test_reward_function_cli_arg_is_parsed() -> None:
-    config = main.parse_args(["--reward-function", "custom_reward"])
+def test_reward_cli_arg_is_parsed() -> None:
+    config = main.parse_args(["--reward", "trace"])
 
-    assert config.reward_function_name == "custom_reward"
+    assert config.reward_method == RewardMethod.TRACE
 
 
 def test_state_encoding_cli_arg_is_parsed() -> None:
@@ -158,34 +158,11 @@ def test_state_encoding_defaults_to_mean_diagonal() -> None:
     assert config.state_encoding_method == StateEncodingMethod.MEAN_DIAGONAL
 
 
-def test_reward_function_registration_is_not_simulator_specific() -> None:
-    config = main.RunConfig(
-        simulator_name="future_sim",
-        function_type="fake_function",
-        reward_function_name="trace",
-        state_encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
-        num_agents=2,
-        num_training_iterations=1,
-        num_steps=4,
-        poly_degree=2,
-        actor_learning_rate=0.1,
-        critic_learning_rate=0.2,
-        discount_factor=0.9,
-        entropy_coefficient=0.0,
-        communication_cost=0.3,
-    )
-
-    reward_function = main.build_reward_function(config)
-
-    assert isinstance(reward_function, TraceReward)
-    assert reward_function.communication_cost == 0.3
-
-
 def test_encoder_registration_uses_simulator_vehicle_state_size() -> None:
     config = main.RunConfig(
         simulator_name="line",
         function_type="poly",
-        reward_function_name="trace",
+        reward_method=RewardMethod.TRACE,
         state_encoding_method=StateEncodingMethod.MEAN_FULL_COVARIANCE,
         num_agents=2,
         num_training_iterations=1,
@@ -219,7 +196,7 @@ def test_encoder_registration_requires_simulator_vehicle_state_size() -> None:
     config = main.RunConfig(
         simulator_name="future_sim",
         function_type="poly",
-        reward_function_name="trace",
+        reward_method=RewardMethod.TRACE,
         state_encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
         num_agents=2,
         num_training_iterations=1,
@@ -271,8 +248,8 @@ def test_entropy_coefficient_defaults_to_nonzero_exploration_bonus() -> None:
     assert config.entropy_coefficient == 0.01
 
 
-def test_polynomial_degree_cli_arg_is_parsed_from_poly_degree() -> None:
-    overridden_config = main.parse_args(["--poly_degree", "4"])
+def test_polynomial_degree_cli_arg_is_parsed() -> None:
+    overridden_config = main.parse_args(["--poly-degree", "4"])
 
     assert overridden_config.poly_degree == 4
 
@@ -288,7 +265,7 @@ def test_line_simulator_registration_uses_configured_dimensions(
     config = main.RunConfig(
         simulator_name="line",
         function_type="fake_function",
-        reward_function_name="trace",
+        reward_method=RewardMethod.TRACE,
         state_encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
         num_agents=2,
         num_training_iterations=1,
@@ -312,7 +289,8 @@ def test_line_simulator_registration_uses_configured_dimensions(
 
     assert isinstance(actor.actor_encoder, ActorEncoder)
     assert isinstance(simulation, LineSimulation)
-    assert isinstance(simulation.reward_function, TraceReward)
+    assert isinstance(simulation.reward_function, Reward)
+    assert simulation.reward_function.reward_method == RewardMethod.TRACE
     assert simulation.num_agents == 2
     assert simulation.num_steps == 4
     assert simulation.reward_function.communication_cost == 0.3
@@ -323,7 +301,7 @@ def test_polynomial_function_provider_registration_uses_encoder_dimensions() -> 
     config = main.RunConfig(
         simulator_name="line",
         function_type="poly",
-        reward_function_name="trace",
+        reward_method=RewardMethod.TRACE,
         state_encoding_method=StateEncodingMethod.MEAN_FULL_COVARIANCE,
         num_agents=2,
         num_training_iterations=1,

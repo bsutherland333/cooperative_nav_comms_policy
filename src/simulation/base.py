@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from simulation.data_structures import EpisodeResult
-from simulation.rewards import RewardFunction
+from simulation.rewards import Reward
 
 if TYPE_CHECKING:
     from policy.actor import Actor
@@ -26,7 +26,7 @@ class Simulation(ABC):
         actor: Actor,
         num_agents: int,
         num_steps: int,
-        reward_function: RewardFunction,
+        reward_function: Reward,
     ) -> None:
         """Store dimensions and actor used by cooperative simulators."""
         if num_agents < 2:

@@ -9,7 +9,7 @@ from policy.actor import Actor
 from policy.function_provider import FunctionProvider
 from simulation.base import Plotter, Simulation
 from simulation.data_structures import EpisodeResult
-from simulation.rewards import RewardFunction
+from simulation.rewards import Reward, RewardMethod
 
 
 class FixedOutputProvider(FunctionProvider):
@@ -40,19 +40,6 @@ class IdentityCriticEncoder:
         return jnp.concatenate(tuple(jnp.asarray(belief) for belief in local_beliefs))
 
 
-class ZeroRewardFunction(RewardFunction):
-    """Reward function that always returns zero."""
-
-    def __call__(
-        self,
-        current_local_beliefs: Sequence[Any],
-        next_local_beliefs: Sequence[Any],
-        communication_events: tuple[tuple[int, int], ...],
-    ) -> float:
-        del current_local_beliefs, next_local_beliefs, communication_events
-        return 0.0
-
-
 class FakeSimulation(Simulation):
     """Simulation that returns an empty episode with its exploration mode."""
 
@@ -65,7 +52,10 @@ class FakeSimulation(Simulation):
             actor=actor,
             num_agents=actor.action_size,
             num_steps=1,
-            reward_function=ZeroRewardFunction(),
+            reward_function=Reward(
+                reward_method=RewardMethod.TRACE,
+                communication_cost=0.0,
+            ),
         )
         self.plot_calls: list[dict[str, Any]] = []
         self.instances.append(self)

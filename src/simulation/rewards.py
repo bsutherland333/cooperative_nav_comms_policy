@@ -1,34 +1,47 @@
-"""Reward-function abstraction for simulator rollouts."""
+"""Reward computations for simulator rollouts."""
 
-from abc import ABC, abstractmethod
+from enum import StrEnum
 from typing import Any, Sequence
 
 import numpy as np
 
 
-class RewardFunction(ABC):
+class RewardMethod(StrEnum):
+    """Supported scalar reward computations."""
+
+    TRACE = "trace"
+
+
+class Reward:
     """Compute one scalar reward from the simulator transition result."""
 
-    @abstractmethod
+    def __init__(
+        self,
+        reward_method: RewardMethod | str,
+        communication_cost: float,
+    ) -> None:
+        """Store the reward computation method and shared scalar parameters."""
+        if communication_cost < 0.0:
+            raise ValueError("communication_cost must be nonnegative.")
+        self.reward_method = RewardMethod(reward_method)
+        self.communication_cost = communication_cost
+
     def __call__(
         self,
         current_local_beliefs: Sequence[Any],
         next_local_beliefs: Sequence[Any],
         communication_events: tuple[tuple[int, int], ...],
     ) -> float:
-        """Return the reward for one transition and its communication events."""
+        """Return the configured transition reward."""
+        if self.reward_method == RewardMethod.TRACE:
+            return self._trace_reward(
+                current_local_beliefs=current_local_beliefs,
+                next_local_beliefs=next_local_beliefs,
+                communication_events=communication_events,
+            )
+        raise ValueError(f"Unknown reward method: {self.reward_method}")
 
-
-class TraceReward(RewardFunction):
-    """Reward trace uncertainty reduction while penalizing communications."""
-
-    def __init__(self, communication_cost: float) -> None:
-        """Store the per-communication event cost."""
-        if communication_cost < 0.0:
-            raise ValueError("communication_cost must be nonnegative.")
-        self.communication_cost = communication_cost
-
-    def __call__(
+    def _trace_reward(
         self,
         current_local_beliefs: Sequence[Any],
         next_local_beliefs: Sequence[Any],

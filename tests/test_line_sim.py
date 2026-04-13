@@ -6,7 +6,7 @@ import pytest
 from policy.actor import Actor
 from simulation.data_structures import LocalBelief
 from simulation.line_sim.sim import LineSimulation
-from simulation.rewards import TraceReward
+from simulation.rewards import Reward, RewardMethod
 from simulation.state_encoding import ActorEncoder, StateEncodingMethod
 from tests.fakes import FixedOutputProvider
 
@@ -34,7 +34,10 @@ def test_line_sim_uses_noisy_truth_and_nominal_priors() -> None:
         actor=_actor(np.array([5.0, 0.0, 0.0])),
         num_agents=3,
         num_steps=1,
-        reward_function=TraceReward(communication_cost=0.01),
+        reward_function=Reward(
+            reward_method=RewardMethod.TRACE,
+            communication_cost=0.01,
+        ),
     )
 
     episode = sim.run(exploration=False)
@@ -84,7 +87,10 @@ def test_line_sim_merges_duplicate_communication_requests() -> None:
         actor=_actor(np.array([0.0, 10.0, 0.0])),
         num_agents=3,
         num_steps=1,
-        reward_function=TraceReward(communication_cost=1_000.0),
+        reward_function=Reward(
+            reward_method=RewardMethod.TRACE,
+            communication_cost=1_000.0,
+        ),
     )
 
     episode = sim.run(exploration=False)
@@ -116,7 +122,10 @@ def test_line_sim_records_the_decision_time_beliefs_used_by_actor() -> None:
         actor=actor,
         num_agents=2,
         num_steps=1,
-        reward_function=TraceReward(communication_cost=0.01),
+        reward_function=Reward(
+            reward_method=RewardMethod.TRACE,
+            communication_cost=0.01,
+        ),
     )
 
     episode = sim.run(exploration=False)
@@ -132,7 +141,10 @@ def test_line_sim_records_the_decision_time_beliefs_used_by_actor() -> None:
 
 
 def test_line_reward_function_rewards_trace_reduction_and_unique_events() -> None:
-    reward_function = TraceReward(communication_cost=2.0)
+    reward_function = Reward(
+        reward_method=RewardMethod.TRACE,
+        communication_cost=2.0,
+    )
     current_local_beliefs = (
         LocalBelief(estimate=np.array([0.0, 1.0]), covariance=np.eye(2) * 3.0),
         LocalBelief(estimate=np.array([1.0, 2.0]), covariance=np.eye(2) * 2.0),
@@ -152,7 +164,10 @@ def test_line_reward_function_rewards_trace_reduction_and_unique_events() -> Non
 
 
 def test_line_reward_function_requires_matching_belief_counts() -> None:
-    reward_function = TraceReward(communication_cost=0.0)
+    reward_function = Reward(
+        reward_method=RewardMethod.TRACE,
+        communication_cost=0.0,
+    )
     local_belief = LocalBelief(
         estimate=np.array([0.0, 1.0]),
         covariance=np.eye(2),
