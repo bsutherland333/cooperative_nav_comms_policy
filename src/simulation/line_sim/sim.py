@@ -14,10 +14,13 @@ DEFAULT_PRIOR_STD = 0.1
 DEFAULT_PROPAGATION_STD = 0.1
 DEFAULT_RANGE_STD = 0.05
 DEFAULT_INITIAL_POSITION_SCALAR = 2.0
+VEHICLE_STATE_SIZE = 1
 
 
 class LineSimulation(Simulation):
     """Jittering 1D fleet with one local factor graph estimator per agent."""
+
+    vehicle_state_size = VEHICLE_STATE_SIZE
 
     def __init__(
         self,

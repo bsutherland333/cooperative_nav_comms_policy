@@ -5,7 +5,7 @@ from typing import Any, Sequence
 import jax.numpy as jnp
 
 from policy.function_provider import FunctionProvider
-from policy.state_encoding import CriticEncoder
+from simulation.state_encoding import CriticEncoder
 
 
 class Critic:

@@ -11,6 +11,7 @@ from policy.actor import Actor
 from simulation import sim_main
 from simulation.line_sim.sim import LineSimulation
 from simulation.rewards import TraceReward
+from simulation.state_encoding import StateEncodingMethod
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -21,6 +22,7 @@ def test_sim_main_parses_line_defaults() -> None:
 
     assert config.simulator_name == "line"
     assert config.reward_function_name == "trace"
+    assert config.state_encoding_method == StateEncodingMethod.MEAN_DIAGONAL
     assert config.num_agents == 3
     assert config.num_steps == 25
 
@@ -31,10 +33,17 @@ def test_sim_main_parses_reward_function() -> None:
     assert config.reward_function_name == "custom_reward"
 
 
+def test_sim_main_parses_state_encoding() -> None:
+    config = sim_main.parse_args(["--state-encoding", "mean_full_covariance"])
+
+    assert config.state_encoding_method == StateEncodingMethod.MEAN_FULL_COVARIANCE
+
+
 def test_sim_main_reward_function_registration_is_not_simulator_specific() -> None:
     config = sim_main.StandaloneSimConfig(
         simulator_name="future_sim",
         reward_function_name="trace",
+        state_encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
         num_agents=2,
         num_steps=1,
     )
@@ -48,6 +57,7 @@ def test_sim_main_builds_line_simulation() -> None:
     config = sim_main.StandaloneSimConfig(
         simulator_name="line",
         reward_function_name="trace",
+        state_encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
         num_agents=2,
         num_steps=1,
     )
@@ -109,6 +119,7 @@ def test_run_standalone_sim_shows_plot_without_saving(
     config = sim_main.StandaloneSimConfig(
         simulator_name="line",
         reward_function_name="trace",
+        state_encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
         num_agents=2,
         num_steps=1,
     )

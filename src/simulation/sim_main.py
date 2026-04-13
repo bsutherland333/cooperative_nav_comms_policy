@@ -19,7 +19,7 @@ from policy.actor import Actor
 from policy.function_provider import FunctionProvider
 from simulation.base import Plotter, Simulation
 from simulation.rewards import TraceReward
-from simulation.line_sim.encoding import LineActorEncoder
+from simulation.state_encoding import ActorEncoder, StateEncodingMethod
 from simulation.line_sim.plotter import LinePlotter
 from simulation.line_sim.sim import LineSimulation
 
@@ -35,6 +35,7 @@ class StandaloneSimConfig:
 
     simulator_name: str
     reward_function_name: str
+    state_encoding_method: StateEncodingMethod
     num_agents: int
     num_steps: int
 
@@ -59,6 +60,11 @@ def parse_args(argv: Sequence[str] | None) -> StandaloneSimConfig:
     parser = ArgumentParser(description="Run a simulator without training.")
     parser.add_argument("--simulator", default="line", dest="simulator_name")
     parser.add_argument("--reward-function", default="trace")
+    parser.add_argument(
+        "--state-encoding",
+        default=StateEncodingMethod.MEAN_DIAGONAL.value,
+        choices=tuple(method.value for method in StateEncodingMethod),
+    )
     parser.add_argument("--num-agents", default=3, type=_positive_int)
     parser.add_argument("--num-steps", default=25, type=_positive_int)
     args = parser.parse_args(argv)
@@ -66,6 +72,7 @@ def parse_args(argv: Sequence[str] | None) -> StandaloneSimConfig:
     return StandaloneSimConfig(
         simulator_name=args.simulator_name,
         reward_function_name=args.reward_function,
+        state_encoding_method=StateEncodingMethod(args.state_encoding),
         num_agents=args.num_agents,
         num_steps=args.num_steps,
     )
@@ -108,7 +115,11 @@ def build_fake_actor(config: StandaloneSimConfig) -> Actor:
     """Build a fixed-logit random policy biased toward no communication."""
     logits = jnp.zeros(config.num_agents)
     logits = logits.at[0].set(FAKE_POLICY_NO_COMMUNICATION_BIAS)
-    actor_encoder = LineActorEncoder(num_agents=config.num_agents)
+    actor_encoder = ActorEncoder(
+        num_agents=config.num_agents,
+        vehicle_state_size=LineSimulation.vehicle_state_size,
+        encoding_method=config.state_encoding_method,
+    )
     provider = FixedLogitProvider(
         input_size=actor_encoder.state_size,
         logits=logits,

@@ -1,11 +1,16 @@
 """Abstract simulator interface."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from policy.actor import Actor
 from simulation.data_structures import EpisodeResult
 from simulation.rewards import RewardFunction
+
+if TYPE_CHECKING:
+    from policy.actor import Actor
 
 
 class Simulation(ABC):

@@ -10,12 +10,12 @@ import matplotlib.pyplot as plt
 from policy.actor import Actor
 from policy.critic import Critic
 from policy.function_provider import FunctionProvider, PolynomialFunctionProvider
-from policy.state_encoding import ActorEncoder, CriticEncoder
 from simulation.base import Plotter
 from simulation.rewards import RewardFunction, TraceReward
-from simulation.line_sim.encoding import (
-    LineActorEncoder,
-    LineCriticEncoder,
+from simulation.state_encoding import (
+    ActorEncoder,
+    CriticEncoder,
+    StateEncodingMethod,
 )
 from simulation.line_sim.plotter import LinePlotter
 from simulation.line_sim.sim import LineSimulation
@@ -29,6 +29,7 @@ class RunConfig:
     simulator_name: str
     function_type: str
     reward_function_name: str
+    state_encoding_method: StateEncodingMethod
     num_agents: int
     num_training_iterations: int
     num_steps: int
@@ -47,6 +48,11 @@ def parse_args(argv: Sequence[str] | None) -> RunConfig:
     )
     parser.add_argument("--simulator", default="line", dest="simulator_name")
     parser.add_argument("--reward-function", default="trace")
+    parser.add_argument(
+        "--state-encoding",
+        default=StateEncodingMethod.MEAN_DIAGONAL.value,
+        choices=tuple(method.value for method in StateEncodingMethod),
+    )
     parser.add_argument("--function-type", default="poly")
     parser.add_argument("--poly_degree", default=2, type=_nonnegative_int)
     parser.add_argument("--num-agents", default=2, type=_positive_int)
@@ -63,6 +69,7 @@ def parse_args(argv: Sequence[str] | None) -> RunConfig:
         simulator_name=args.simulator_name,
         function_type=args.function_type,
         reward_function_name=args.reward_function,
+        state_encoding_method=StateEncodingMethod(args.state_encoding),
         num_agents=args.num_agents,
         num_training_iterations=args.num_training_iterations,
         num_steps=args.num_steps,
@@ -144,7 +151,11 @@ def run_training(config: RunConfig) -> None:
 
 def build_actor(config: RunConfig) -> Actor:
     """Construct the shared actor policy."""
-    actor_encoder = build_actor_encoder(config)
+    actor_encoder = ActorEncoder(
+        num_agents=config.num_agents,
+        vehicle_state_size=_vehicle_state_size(config),
+        encoding_method=config.state_encoding_method,
+    )
     provider = build_function_provider(
         config=config,
         role="actor",
@@ -160,7 +171,11 @@ def build_actor(config: RunConfig) -> Actor:
 
 def build_critic(config: RunConfig) -> Critic:
     """Construct the centralized value-function critic."""
-    critic_encoder = build_critic_encoder(config)
+    critic_encoder = CriticEncoder(
+        num_agents=config.num_agents,
+        vehicle_state_size=_vehicle_state_size(config),
+        encoding_method=config.state_encoding_method,
+    )
     provider = build_function_provider(
         config=config,
         role="critic",
@@ -180,27 +195,11 @@ def build_function_provider(
 ) -> FunctionProvider:
     """Create a concrete function provider for the selected function type."""
     if config.function_type == "poly":
-        if config.simulator_name == "line":
-            if role == "actor":
-                input_size = LineActorEncoder(
-                    num_agents=config.num_agents
-                ).state_size
-            elif role == "critic":
-                input_size = LineCriticEncoder(
-                    num_agents=config.num_agents
-                ).state_size
-            else:
-                raise ValueError(f"Unknown provider role: {role}")
-
-            return PolynomialFunctionProvider(
-                input_size=input_size,
-                output_size=output_size,
-                degree=config.poly_degree,
-            )
-
-        raise NotImplementedError(
-            f"No polynomial FunctionProvider is registered for simulator "
-            f"'{config.simulator_name}'."
+        input_size = _encoder_state_size(config=config, role=role)
+        return PolynomialFunctionProvider(
+            input_size=input_size,
+            output_size=output_size,
+            degree=config.poly_degree,
         )
 
     raise NotImplementedError(
@@ -209,23 +208,27 @@ def build_function_provider(
     )
 
 
-def build_actor_encoder(config: RunConfig) -> ActorEncoder:
-    """Create the concrete actor encoder for the selected simulator."""
+def _encoder_state_size(config: RunConfig, role: str) -> int:
+    if role == "actor":
+        return ActorEncoder(
+            num_agents=config.num_agents,
+            vehicle_state_size=_vehicle_state_size(config),
+            encoding_method=config.state_encoding_method,
+        ).state_size
+    if role == "critic":
+        return CriticEncoder(
+            num_agents=config.num_agents,
+            vehicle_state_size=_vehicle_state_size(config),
+            encoding_method=config.state_encoding_method,
+        ).state_size
+    raise ValueError(f"Unknown provider role: {role}")
+
+
+def _vehicle_state_size(config: RunConfig) -> int:
     if config.simulator_name == "line":
-        return LineActorEncoder(num_agents=config.num_agents)
-
+        return LineSimulation.vehicle_state_size
     raise NotImplementedError(
-        f"No ActorEncoder is registered for simulator '{config.simulator_name}'."
-    )
-
-
-def build_critic_encoder(config: RunConfig) -> CriticEncoder:
-    """Create the concrete critic encoder for the selected simulator."""
-    if config.simulator_name == "line":
-        return LineCriticEncoder(num_agents=config.num_agents)
-
-    raise NotImplementedError(
-        f"No CriticEncoder is registered for simulator '{config.simulator_name}'."
+        f"No vehicle_state_size is registered for simulator '{config.simulator_name}'."
     )
 
 

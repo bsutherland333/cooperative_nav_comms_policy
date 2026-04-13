@@ -5,14 +5,18 @@ import pytest
 
 from policy.actor import Actor
 from simulation.data_structures import LocalBelief
-from simulation.line_sim.encoding import LineActorEncoder
 from simulation.line_sim.sim import LineSimulation
 from simulation.rewards import TraceReward
+from simulation.state_encoding import ActorEncoder, StateEncodingMethod
 from tests.fakes import FixedOutputProvider
 
 
 def _actor(logits: np.ndarray) -> Actor:
-    actor_encoder = LineActorEncoder(num_agents=int(logits.shape[0]))
+    actor_encoder = ActorEncoder(
+        num_agents=int(logits.shape[0]),
+        vehicle_state_size=1,
+        encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
+    )
     provider = FixedOutputProvider(
         input_size=actor_encoder.state_size,
         output=logits,
@@ -93,7 +97,11 @@ def test_line_sim_merges_duplicate_communication_requests() -> None:
 
 
 def test_line_sim_records_the_decision_time_beliefs_used_by_actor() -> None:
-    actor_encoder = LineActorEncoder(num_agents=2)
+    actor_encoder = ActorEncoder(
+        num_agents=2,
+        vehicle_state_size=1,
+        encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
+    )
     provider = FixedOutputProvider(
         input_size=actor_encoder.state_size,
         output=np.array([5.0, 0.0]),

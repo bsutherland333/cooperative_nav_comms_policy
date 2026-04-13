@@ -7,20 +7,19 @@ import pytest
 
 import main
 from policy.function_provider import PolynomialFunctionProvider
-from simulation.line_sim.encoding import (
-    LineActorEncoder,
-    LineCriticEncoder,
-)
 from simulation.line_sim.plotter import LinePlotter
 from simulation.line_sim.sim import LineSimulation
 from simulation.data_structures import EpisodeResult, SimulationStep
 from simulation.rewards import TraceReward
+from simulation.state_encoding import (
+    ActorEncoder,
+    CriticEncoder,
+    StateEncodingMethod,
+)
 from tests.fakes import (
     FakePlotter,
     FakeSimulation,
     FixedOutputProvider,
-    IdentityActorEncoder,
-    IdentityCriticEncoder,
 )
 
 
@@ -83,9 +82,10 @@ def test_run_training_orchestrates_training_and_status_reporting(
     FakeSimulation.instances = []
     show_calls: list[bool] = []
     config = main.RunConfig(
-        simulator_name="fake",
+        simulator_name="line",
         function_type="fake_function",
         reward_function_name="fake_reward",
+        state_encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
         num_agents=3,
         num_training_iterations=3,
         num_steps=60,
@@ -101,16 +101,6 @@ def test_run_training_orchestrates_training_and_status_reporting(
         main,
         "build_function_provider",
         _fake_function_provider,
-    )
-    monkeypatch.setattr(
-        main,
-        "build_actor_encoder",
-        lambda config: IdentityActorEncoder(),
-    )
-    monkeypatch.setattr(
-        main,
-        "build_critic_encoder",
-        lambda config: IdentityCriticEncoder(),
     )
     monkeypatch.setattr(main, "build_simulation_type", lambda config: FakeSimulation)
     monkeypatch.setattr(main, "build_plotter", lambda config: FakePlotter())
@@ -156,11 +146,24 @@ def test_reward_function_cli_arg_is_parsed() -> None:
     assert config.reward_function_name == "custom_reward"
 
 
+def test_state_encoding_cli_arg_is_parsed() -> None:
+    config = main.parse_args(["--state-encoding", "mean_full_covariance"])
+
+    assert config.state_encoding_method == StateEncodingMethod.MEAN_FULL_COVARIANCE
+
+
+def test_state_encoding_defaults_to_mean_diagonal() -> None:
+    config = main.parse_args([])
+
+    assert config.state_encoding_method == StateEncodingMethod.MEAN_DIAGONAL
+
+
 def test_reward_function_registration_is_not_simulator_specific() -> None:
     config = main.RunConfig(
         simulator_name="future_sim",
         function_type="fake_function",
         reward_function_name="trace",
+        state_encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
         num_agents=2,
         num_training_iterations=1,
         num_steps=4,
@@ -176,6 +179,61 @@ def test_reward_function_registration_is_not_simulator_specific() -> None:
 
     assert isinstance(reward_function, TraceReward)
     assert reward_function.communication_cost == 0.3
+
+
+def test_encoder_registration_uses_simulator_vehicle_state_size() -> None:
+    config = main.RunConfig(
+        simulator_name="line",
+        function_type="poly",
+        reward_function_name="trace",
+        state_encoding_method=StateEncodingMethod.MEAN_FULL_COVARIANCE,
+        num_agents=2,
+        num_training_iterations=1,
+        num_steps=4,
+        poly_degree=2,
+        actor_learning_rate=0.1,
+        critic_learning_rate=0.2,
+        discount_factor=0.9,
+        entropy_coefficient=0.0,
+        communication_cost=0.3,
+    )
+
+    actor = main.build_actor(config)
+    critic = main.build_critic(config)
+    actor_provider = main.build_function_provider(
+        config=config,
+        role="actor",
+        output_size=config.num_agents,
+    )
+
+    assert isinstance(actor.actor_encoder, ActorEncoder)
+    assert isinstance(critic.critic_encoder, CriticEncoder)
+    assert actor.actor_encoder.vehicle_state_size == LineSimulation.vehicle_state_size
+    assert critic.critic_encoder.actor_encoder.vehicle_state_size == (
+        LineSimulation.vehicle_state_size
+    )
+    assert actor_provider.input_size == actor.actor_encoder.state_size
+
+
+def test_encoder_registration_requires_simulator_vehicle_state_size() -> None:
+    config = main.RunConfig(
+        simulator_name="future_sim",
+        function_type="poly",
+        reward_function_name="trace",
+        state_encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
+        num_agents=2,
+        num_training_iterations=1,
+        num_steps=4,
+        poly_degree=2,
+        actor_learning_rate=0.1,
+        critic_learning_rate=0.2,
+        discount_factor=0.9,
+        entropy_coefficient=0.0,
+        communication_cost=0.3,
+    )
+
+    with pytest.raises(NotImplementedError, match="vehicle_state_size"):
+        main.build_actor(config)
 
 
 def test_num_steps_cli_arg_is_parsed() -> None:
@@ -231,6 +289,7 @@ def test_line_simulator_registration_uses_configured_dimensions(
         simulator_name="line",
         function_type="fake_function",
         reward_function_name="trace",
+        state_encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
         num_agents=2,
         num_training_iterations=1,
         num_steps=4,
@@ -251,7 +310,7 @@ def test_line_simulator_registration_uses_configured_dimensions(
     simulation_type = main.build_simulation_type(config)
     simulation = simulation_type(actor)
 
-    assert isinstance(actor.actor_encoder, LineActorEncoder)
+    assert isinstance(actor.actor_encoder, ActorEncoder)
     assert isinstance(simulation, LineSimulation)
     assert isinstance(simulation.reward_function, TraceReward)
     assert simulation.num_agents == 2
@@ -260,11 +319,12 @@ def test_line_simulator_registration_uses_configured_dimensions(
     assert isinstance(main.build_plotter(config), LinePlotter)
 
 
-def test_polynomial_function_provider_registration_uses_line_dimensions() -> None:
+def test_polynomial_function_provider_registration_uses_encoder_dimensions() -> None:
     config = main.RunConfig(
         simulator_name="line",
         function_type="poly",
         reward_function_name="trace",
+        state_encoding_method=StateEncodingMethod.MEAN_FULL_COVARIANCE,
         num_agents=2,
         num_training_iterations=1,
         num_steps=4,
@@ -275,8 +335,16 @@ def test_polynomial_function_provider_registration_uses_line_dimensions() -> Non
         entropy_coefficient=0.0,
         communication_cost=0.3,
     )
-    actor_encoder = LineActorEncoder(num_agents=config.num_agents)
-    critic_encoder = LineCriticEncoder(num_agents=config.num_agents)
+    actor_encoder = ActorEncoder(
+        num_agents=config.num_agents,
+        vehicle_state_size=LineSimulation.vehicle_state_size,
+        encoding_method=config.state_encoding_method,
+    )
+    critic_encoder = CriticEncoder(
+        num_agents=config.num_agents,
+        vehicle_state_size=LineSimulation.vehicle_state_size,
+        encoding_method=config.state_encoding_method,
+    )
 
     actor_provider = main.build_function_provider(
         config=config,
@@ -304,13 +372,23 @@ def _fake_function_provider(
     output_size: int,
 ) -> FixedOutputProvider:
     if role == "actor":
+        actor_encoder = ActorEncoder(
+            num_agents=config.num_agents,
+            vehicle_state_size=LineSimulation.vehicle_state_size,
+            encoding_method=config.state_encoding_method,
+        )
         return FixedOutputProvider(
-            input_size=2,
+            input_size=actor_encoder.state_size,
             output=jnp.arange(output_size, dtype=jnp.float32),
         )
     if role == "critic":
+        critic_encoder = CriticEncoder(
+            num_agents=config.num_agents,
+            vehicle_state_size=LineSimulation.vehicle_state_size,
+            encoding_method=config.state_encoding_method,
+        )
         return FixedOutputProvider(
-            input_size=6,
+            input_size=critic_encoder.state_size,
             output=jnp.zeros(output_size),
         )
     raise ValueError(f"Unknown provider role: {role}")
@@ -333,8 +411,16 @@ def _line_function_provider(
     role: str,
     output_size: int,
 ) -> FixedOutputProvider:
-    actor_encoder = LineActorEncoder(num_agents=config.num_agents)
-    critic_encoder = LineCriticEncoder(num_agents=config.num_agents)
+    actor_encoder = ActorEncoder(
+        num_agents=config.num_agents,
+        vehicle_state_size=LineSimulation.vehicle_state_size,
+        encoding_method=config.state_encoding_method,
+    )
+    critic_encoder = CriticEncoder(
+        num_agents=config.num_agents,
+        vehicle_state_size=LineSimulation.vehicle_state_size,
+        encoding_method=config.state_encoding_method,
+    )
     if role == "actor":
         input_size = actor_encoder.state_size
     elif role == "critic":

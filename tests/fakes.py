@@ -7,10 +7,9 @@ import jax.numpy as jnp
 
 from policy.actor import Actor
 from policy.function_provider import FunctionProvider
-from policy.state_encoding import ActorEncoder, CriticEncoder
 from simulation.base import Plotter, Simulation
-from simulation.rewards import RewardFunction
 from simulation.data_structures import EpisodeResult
+from simulation.rewards import RewardFunction
 
 
 class FixedOutputProvider(FunctionProvider):
@@ -26,7 +25,7 @@ class FixedOutputProvider(FunctionProvider):
         return parameters["output"]
 
 
-class IdentityActorEncoder(ActorEncoder):
+class IdentityActorEncoder:
     """Actor encoder that treats the local belief as an encoded vector."""
 
     def encode_state(self, local_belief: Any, agent_id: int) -> jnp.ndarray:
@@ -34,7 +33,7 @@ class IdentityActorEncoder(ActorEncoder):
         return jnp.asarray(local_belief)
 
 
-class IdentityCriticEncoder(CriticEncoder):
+class IdentityCriticEncoder:
     """Critic encoder that concatenates already encoded local belief vectors."""
 
     def encode_state(self, local_beliefs: Sequence[Any]) -> jnp.ndarray:

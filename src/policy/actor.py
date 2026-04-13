@@ -8,7 +8,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from policy.function_provider import FunctionProvider
-from policy.state_encoding import ActorEncoder
+from simulation.state_encoding import ActorEncoder
 
 
 @dataclass(frozen=True)
