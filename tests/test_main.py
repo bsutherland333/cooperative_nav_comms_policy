@@ -33,8 +33,7 @@ class RecordingTrainer:
         self.kwargs = kwargs
         self.training_episode_count = 0
         self.update_count = 0
-        self.critic_loss_count = 0
-        self.critic_loss_episodes: list[EpisodeResult] = []
+        self.update_episodes: list[EpisodeResult] = []
         self.instances.append(self)
 
     def collect_training_episode(self) -> EpisodeResult:
@@ -51,12 +50,9 @@ class RecordingTrainer:
             },
         )
 
-    def update_from_episode(self, episode: EpisodeResult) -> None:
+    def update_from_episode(self, episode: EpisodeResult) -> float:
         self.update_count += 1
-
-    def critic_loss(self, episode: EpisodeResult) -> float:
-        self.critic_loss_count += 1
-        self.critic_loss_episodes.append(episode)
+        self.update_episodes.append(episode)
         return 1.25
 
 
@@ -126,8 +122,7 @@ def test_run_training_orchestrates_training_and_status_reporting(
     trainer = RecordingTrainer.instances[0]
     assert trainer.training_episode_count == 3
     assert trainer.update_count == 3
-    assert trainer.critic_loss_count == 3
-    assert [episode.metadata["index"] for episode in trainer.critic_loss_episodes] == [
+    assert [episode.metadata["index"] for episode in trainer.update_episodes] == [
         1,
         2,
         3,

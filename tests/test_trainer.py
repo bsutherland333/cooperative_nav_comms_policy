@@ -77,7 +77,7 @@ def test_trainer_update_noops_on_empty_episode() -> None:
 def test_trainer_critic_loss_returns_zero_for_empty_episode() -> None:
     trainer = _trainer()
 
-    loss = trainer.critic_loss(EpisodeResult(steps=(), metadata={}))
+    loss = trainer._critic_loss(EpisodeResult(steps=(), metadata={}))
 
     assert loss == 0.0
 
@@ -85,7 +85,7 @@ def test_trainer_critic_loss_returns_zero_for_empty_episode() -> None:
 def test_trainer_critic_loss_uses_discounted_reward_to_go_targets() -> None:
     trainer = _trainer()
 
-    loss = trainer.critic_loss(
+    loss = trainer._critic_loss(
         _episode(
             rewards=(1.0, 1.0),
             action_vectors=((1, 1), (1, 1)),
@@ -100,7 +100,7 @@ def test_trainer_update_applies_actor_ascent_and_critic_descent() -> None:
     critic = _critic()
     trainer = _trainer(actor=actor, critic=critic)
 
-    trainer.update_from_episode(
+    critic_loss = trainer.update_from_episode(
         _episode(
             rewards=(1.0, 1.0),
             action_vectors=((1, 1), (1, 1)),
@@ -115,6 +115,7 @@ def test_trainer_update_applies_actor_ascent_and_critic_descent() -> None:
         critic.get_parameters()["output"],
         jnp.array([0.125]),
     )
+    assert jnp.isclose(critic_loss, 0.6640625)
 
 
 def test_trainer_critic_uses_discounted_reward_to_go_targets() -> None:

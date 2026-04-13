@@ -103,11 +103,10 @@ def run_training(config: RunConfig) -> None:
     critic_losses: list[float] = []
     for iteration_index in range(config.num_training_iterations):
         training_episode = trainer.collect_training_episode()
-        trainer.update_from_episode(training_episode)
+        critic_loss = trainer.update_from_episode(training_episode)
 
         training_iteration = iteration_index + 1
         reward_sum = sum(float(step.reward) for step in training_episode.steps)
-        critic_loss = trainer.critic_loss(training_episode)
         training_iterations.append(training_iteration)
         reward_sums.append(reward_sum)
         critic_losses.append(critic_loss)

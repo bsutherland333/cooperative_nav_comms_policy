@@ -60,15 +60,12 @@ class LineSimulation(Simulation):
             )
             for _ in range(self.num_agents)
         )
-        prior_local_belief = _local_beliefs(estimators, 0)
+        local_beliefs = _local_beliefs(estimators, 0)
+        prior_local_belief = local_beliefs
 
         steps: list[SimulationStep] = []
         range_measurement_count = 0
         for timestep in range(self.num_steps):
-            if timestep == 0:
-                local_beliefs = prior_local_belief
-            else:
-                local_beliefs = _local_beliefs(estimators, timestep)
             decisions = self._sample_actions(
                 local_beliefs=local_beliefs,
                 exploration=exploration,
@@ -98,8 +95,6 @@ class LineSimulation(Simulation):
                     measurement=measurement,
                     measurement_id=range_measurement_count,
                 )
-                first_estimator.optimize()
-                second_estimator.optimize()
                 range_measurement_count += 1
 
             next_timestep = timestep + 1
@@ -128,6 +123,7 @@ class LineSimulation(Simulation):
                     extra={},
                 )
             )
+            local_beliefs = next_local_beliefs
 
         return EpisodeResult.from_steps(
             steps=steps,
