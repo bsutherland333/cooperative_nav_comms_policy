@@ -36,6 +36,7 @@ class RunConfig:
     actor_learning_rate: float
     critic_learning_rate: float
     discount_factor: float
+    entropy_coefficient: float
     communication_cost: float
 
 
@@ -49,12 +50,13 @@ def parse_args(argv: Sequence[str] | None) -> RunConfig:
     parser.add_argument("--function-type", default="poly")
     parser.add_argument("--poly_degree", default=2, type=_nonnegative_int)
     parser.add_argument("--num-agents", default=2, type=_positive_int)
-    parser.add_argument("--num-training-iterations", default=50, type=_positive_int)
+    parser.add_argument("--num-training-iterations", default=20, type=_positive_int)
     parser.add_argument("--num-steps", default=120, type=_positive_int)
-    parser.add_argument("--actor-learning-rate", default=1e-4, type=_positive_float)
-    parser.add_argument("--critic-learning-rate", default=1e-4, type=_positive_float)
+    parser.add_argument("--actor-learning-rate", default=1e-3, type=_positive_float)
+    parser.add_argument("--critic-learning-rate", default=1e-3, type=_positive_float)
     parser.add_argument("--discount-factor", default=0.95, type=_unit_interval_float)
-    parser.add_argument("--communication-cost", default=0.1, type=_nonnegative_float)
+    parser.add_argument("--entropy-coefficient", default=0.01, type=_nonnegative_float)
+    parser.add_argument("--communication-cost", default=0.03, type=_nonnegative_float)
     args = parser.parse_args(argv)
 
     return RunConfig(
@@ -68,6 +70,7 @@ def parse_args(argv: Sequence[str] | None) -> RunConfig:
         actor_learning_rate=args.actor_learning_rate,
         critic_learning_rate=args.critic_learning_rate,
         discount_factor=args.discount_factor,
+        entropy_coefficient=args.entropy_coefficient,
         communication_cost=args.communication_cost,
     )
 
@@ -97,6 +100,7 @@ def run_training(config: RunConfig) -> None:
         actor_learning_rate=config.actor_learning_rate,
         critic_learning_rate=config.critic_learning_rate,
         discount_factor=config.discount_factor,
+        entropy_coefficient=config.entropy_coefficient,
     )
     training_iterations: list[int] = []
     reward_sums: list[float] = []

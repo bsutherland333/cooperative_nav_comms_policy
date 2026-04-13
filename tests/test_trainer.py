@@ -38,6 +38,7 @@ def _trainer(
     actor: Actor | None = None,
     critic: Critic | None = None,
     discount_factor: float = 0.5,
+    entropy_coefficient: float = 0.0,
 ) -> Trainer:
     FakeSimulation.instances = []
     return Trainer(
@@ -47,6 +48,7 @@ def _trainer(
         actor_learning_rate=0.1,
         critic_learning_rate=0.1,
         discount_factor=discount_factor,
+        entropy_coefficient=entropy_coefficient,
     )
 
 
@@ -156,6 +158,28 @@ def test_trainer_actor_bootstraps_nonterminal_td_advantages() -> None:
     assert jnp.allclose(
         actor.get_parameters()["output"],
         jnp.array([0.1, -0.1]),
+    )
+
+
+def test_trainer_entropy_bonus_pushes_policy_toward_higher_entropy() -> None:
+    actor = _actor(jnp.array([2.0, 0.0]))
+    critic = _critic()
+    trainer = _trainer(
+        actor=actor,
+        critic=critic,
+        entropy_coefficient=0.01,
+    )
+
+    trainer.update_from_episode(
+        _episode(
+            rewards=(0.0, 0.0),
+            action_vectors=((0, 0), (0, 0)),
+        )
+    )
+
+    assert jnp.allclose(
+        actor.get_parameters()["output"],
+        jnp.array([1.9, 0.1]),
     )
 
 

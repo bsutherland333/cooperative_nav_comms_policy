@@ -36,6 +36,7 @@ class Trainer:
         actor_learning_rate: float,
         critic_learning_rate: float,
         discount_factor: float,
+        entropy_coefficient: float,
     ) -> None:
         """Store the policy, value function, and simulator type."""
         if actor_learning_rate <= 0.0:
@@ -44,6 +45,8 @@ class Trainer:
             raise ValueError("critic_learning_rate must be positive.")
         if discount_factor < 0.0 or discount_factor > 1.0:
             raise ValueError("discount_factor must be in [0, 1].")
+        if entropy_coefficient < 0.0:
+            raise ValueError("entropy_coefficient must be nonnegative.")
 
         self.actor = actor
         self.critic = critic
@@ -51,6 +54,7 @@ class Trainer:
         self.actor_learning_rate = actor_learning_rate
         self.critic_learning_rate = critic_learning_rate
         self.discount_factor = discount_factor
+        self.entropy_coefficient = entropy_coefficient
         self._actor_gradient_function = jax.jit(jax.grad(self._actor_objective_arrays))
         self._critic_gradient_function = jax.jit(jax.grad(self._critic_loss_from_arrays))
         self._critic_loss_function = jax.jit(self._critic_loss_from_arrays)
@@ -192,8 +196,17 @@ class Trainer:
             axis=2,
         ).squeeze(axis=2)
         step_log_probability = jnp.sum(selected_log_probabilities, axis=1)
+        probabilities = jnp.exp(log_probabilities)
+        entropies = -jnp.sum(probabilities * log_probabilities, axis=2)
+        step_entropy = jnp.sum(entropies, axis=1)
         discounts = self.discount_factor ** jnp.arange(global_states.shape[0] - 1)
-        return jnp.mean(discounts * advantages * step_log_probability)
+        return jnp.mean(
+            discounts
+            * (
+                advantages * step_log_probability
+                + self.entropy_coefficient * step_entropy
+            )
+        )
 
     def _critic_loss_from_arrays(
         self,

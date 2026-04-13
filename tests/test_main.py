@@ -93,6 +93,7 @@ def test_run_training_orchestrates_training_and_status_reporting(
         actor_learning_rate=0.1,
         critic_learning_rate=0.2,
         discount_factor=0.9,
+        entropy_coefficient=0.01,
         communication_cost=0.3,
     )
 
@@ -131,6 +132,7 @@ def test_run_training_orchestrates_training_and_status_reporting(
     assert trainer.kwargs["actor_learning_rate"] == 0.1
     assert trainer.kwargs["critic_learning_rate"] == 0.2
     assert trainer.kwargs["discount_factor"] == 0.9
+    assert trainer.kwargs["entropy_coefficient"] == 0.01
     assert "iteration=1 reward_sum=1 critic_loss=1.25" in captured.out
     assert "iteration=2 reward_sum=2 critic_loss=1.25" in captured.out
     assert "iteration=3 reward_sum=3 critic_loss=1.25" in captured.out
@@ -166,6 +168,7 @@ def test_reward_function_registration_is_not_simulator_specific() -> None:
         actor_learning_rate=0.1,
         critic_learning_rate=0.2,
         discount_factor=0.9,
+        entropy_coefficient=0.0,
         communication_cost=0.3,
     )
 
@@ -190,6 +193,8 @@ def test_training_hyperparameters_are_parsed() -> None:
             "0.3",
             "--discount-factor",
             "0.8",
+            "--entropy-coefficient",
+            "0.01",
             "--communication-cost",
             "0.4",
         ]
@@ -198,7 +203,14 @@ def test_training_hyperparameters_are_parsed() -> None:
     assert config.actor_learning_rate == 0.2
     assert config.critic_learning_rate == 0.3
     assert config.discount_factor == 0.8
+    assert config.entropy_coefficient == 0.01
     assert config.communication_cost == 0.4
+
+
+def test_entropy_coefficient_defaults_to_nonzero_exploration_bonus() -> None:
+    config = main.parse_args([])
+
+    assert config.entropy_coefficient == 0.01
 
 
 def test_polynomial_degree_cli_arg_is_parsed_from_poly_degree() -> None:
@@ -226,6 +238,7 @@ def test_line_simulator_registration_uses_configured_dimensions(
         actor_learning_rate=0.1,
         critic_learning_rate=0.2,
         discount_factor=0.9,
+        entropy_coefficient=0.0,
         communication_cost=0.3,
     )
     monkeypatch.setattr(
@@ -259,6 +272,7 @@ def test_polynomial_function_provider_registration_uses_line_dimensions() -> Non
         actor_learning_rate=0.1,
         critic_learning_rate=0.2,
         discount_factor=0.9,
+        entropy_coefficient=0.0,
         communication_cost=0.3,
     )
     actor_encoder = LineActorEncoder(num_agents=config.num_agents)
