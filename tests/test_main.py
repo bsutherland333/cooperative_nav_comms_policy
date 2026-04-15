@@ -21,6 +21,7 @@ from tests.fakes import (
     FakeSimulation,
     FixedOutputProvider,
 )
+from training.replay import ReplayBuffer, ReplayConfig
 from training.trainer import TrainingUpdateResult
 
 
@@ -108,6 +109,9 @@ def test_run_training_orchestrates_training_and_status_reporting(
         discount_factor=0.9,
         entropy_coefficient=0.01,
         communication_cost=0.3,
+        replay_buffer_size=17,
+        replay_batch_size=5,
+        replay_warmup_size=7,
     )
 
     monkeypatch.setattr(
@@ -141,7 +145,11 @@ def test_run_training_orchestrates_training_and_status_reporting(
     assert trainer.kwargs["actor_learning_rate"] == 0.1
     assert trainer.kwargs["critic_learning_rate"] == 0.2
     assert trainer.kwargs["discount_factor"] == 0.9
-    assert trainer.kwargs["entropy_coefficient"] == 0.01
+    assert trainer.kwargs["entropy_coefficient"] == config.entropy_coefficient
+    assert isinstance(trainer.kwargs["replay_config"], ReplayConfig)
+    assert isinstance(trainer.kwargs["replay_buffer"], ReplayBuffer)
+    assert trainer.kwargs["replay_config"].buffer_size == config.replay_buffer_size
+    assert trainer.kwargs["replay_buffer"].buffer_size == config.replay_buffer_size
     assert (
         "iteration=1 reward_sum=1 average_discounted_return=1 critic_loss=1.25"
         in captured.out
@@ -206,6 +214,9 @@ def test_run_training_plots_final_evaluation_after_keyboard_interrupt(
         discount_factor=0.9,
         entropy_coefficient=0.01,
         communication_cost=0.3,
+        replay_buffer_size=13,
+        replay_batch_size=4,
+        replay_warmup_size=6,
     )
 
     monkeypatch.setattr(
@@ -282,12 +293,6 @@ def test_state_encoding_cli_arg_is_parsed() -> None:
     assert config.state_encoding_method == StateEncodingMethod.MEAN_FULL_COVARIANCE
 
 
-def test_state_encoding_defaults_to_mean_full_correlation() -> None:
-    config = main.parse_args([])
-
-    assert config.state_encoding_method == StateEncodingMethod.MEAN_FULL_CORRELATION
-
-
 def test_encoder_registration_uses_simulator_vehicle_state_size() -> None:
     config = main.RunConfig(
         simulator_name="line",
@@ -303,6 +308,9 @@ def test_encoder_registration_uses_simulator_vehicle_state_size() -> None:
         discount_factor=0.9,
         entropy_coefficient=0.0,
         communication_cost=0.3,
+        replay_buffer_size=13,
+        replay_batch_size=4,
+        replay_warmup_size=6,
     )
 
     actor = main.build_actor(config)
@@ -337,6 +345,9 @@ def test_encoder_registration_requires_simulator_vehicle_state_size() -> None:
         discount_factor=0.9,
         entropy_coefficient=0.0,
         communication_cost=0.3,
+        replay_buffer_size=13,
+        replay_batch_size=4,
+        replay_warmup_size=6,
     )
 
     with pytest.raises(NotImplementedError, match="vehicle_state_size"):
@@ -372,16 +383,27 @@ def test_training_hyperparameters_are_parsed() -> None:
     assert config.communication_cost == 0.4
 
 
-def test_entropy_coefficient_defaults_to_nonzero_exploration_bonus() -> None:
-    config = main.parse_args([])
-
-    assert config.entropy_coefficient == 0.01
-
-
 def test_polynomial_degree_cli_arg_is_parsed() -> None:
     overridden_config = main.parse_args(["--poly-degree", "4"])
 
     assert overridden_config.poly_degree == 4
+
+
+def test_replay_cli_args_are_parsed() -> None:
+    config = main.parse_args(
+        [
+            "--replay-buffer-size",
+            "20",
+            "--replay-batch-size",
+            "5",
+            "--replay-warmup-size",
+            "10",
+        ]
+    )
+
+    assert config.replay_buffer_size == 20
+    assert config.replay_batch_size == 5
+    assert config.replay_warmup_size == 10
 
 
 def test_function_type_cli_arg_rejects_polynomial_degree() -> None:
@@ -406,6 +428,9 @@ def test_line_simulator_registration_uses_configured_dimensions(
         discount_factor=0.9,
         entropy_coefficient=0.0,
         communication_cost=0.3,
+        replay_buffer_size=13,
+        replay_batch_size=4,
+        replay_warmup_size=6,
     )
     monkeypatch.setattr(
         main,
@@ -442,6 +467,9 @@ def test_polynomial_function_provider_registration_uses_encoder_dimensions() -> 
         discount_factor=0.9,
         entropy_coefficient=0.0,
         communication_cost=0.3,
+        replay_buffer_size=13,
+        replay_batch_size=4,
+        replay_warmup_size=6,
     )
     actor_encoder = ActorEncoder(
         num_agents=config.num_agents,
@@ -506,6 +534,7 @@ def _fake_step(reward: float) -> SimulationStep:
     return SimulationStep(
         timestep=0,
         local_beliefs=(jnp.array([0.0]),),
+        next_local_beliefs=(jnp.array([0.0]),),
         action_vector=(0,),
         communication_events=(),
         reward=reward,

@@ -1,11 +1,14 @@
 """Tests for training orchestration."""
 
 import jax.numpy as jnp
+import numpy as np
+import pytest
 
 from policy.actor import Actor
 from policy.critic import Critic
 from policy.function_provider import FunctionProvider
 from simulation.data_structures import EpisodeResult, SimulationStep
+from training.replay import ReplayBuffer, ReplayConfig, ReplayTransition
 from training.trainer import Trainer
 from tests.fakes import (
     FakeSimulation,
@@ -39,8 +42,15 @@ def _trainer(
     critic: Critic | None = None,
     discount_factor: float = 0.5,
     entropy_coefficient: float = 0.0,
+    replay_config: ReplayConfig | None = None,
+    replay_buffer: ReplayBuffer | None = None,
 ) -> Trainer:
     FakeSimulation.instances = []
+    config = replay_config or ReplayConfig(
+        buffer_size=0,
+        batch_size=1,
+        warmup_size=1,
+    )
     return Trainer(
         actor=actor or _actor(),
         critic=critic or _critic(),
@@ -49,6 +59,12 @@ def _trainer(
         critic_learning_rate=0.1,
         discount_factor=discount_factor,
         entropy_coefficient=entropy_coefficient,
+        replay_config=config,
+        replay_buffer=(
+            replay_buffer
+            if replay_buffer is not None
+            else ReplayBuffer(buffer_size=config.buffer_size)
+        ),
     )
 
 
@@ -78,6 +94,18 @@ def test_trainer_update_noops_on_empty_episode() -> None:
     assert update_result.average_discounted_return == 0.0
 
 
+def test_trainer_requires_matching_replay_config_and_buffer_size() -> None:
+    with pytest.raises(ValueError, match="Replay buffer size"):
+        _trainer(
+            replay_config=ReplayConfig(
+                buffer_size=2,
+                batch_size=1,
+                warmup_size=1,
+            ),
+            replay_buffer=ReplayBuffer(buffer_size=1),
+        )
+
+
 def test_trainer_critic_loss_returns_zero_for_empty_episode() -> None:
     trainer = _trainer()
 
@@ -86,7 +114,7 @@ def test_trainer_critic_loss_returns_zero_for_empty_episode() -> None:
     assert loss == 0.0
 
 
-def test_trainer_critic_loss_uses_discounted_reward_to_go_targets() -> None:
+def test_trainer_critic_loss_uses_one_step_td_targets() -> None:
     trainer = _trainer()
 
     loss = trainer._critic_loss(
@@ -96,7 +124,7 @@ def test_trainer_critic_loss_uses_discounted_reward_to_go_targets() -> None:
         )
     )
 
-    assert jnp.isclose(loss, 0.8125)
+    assert jnp.isclose(loss, 0.5)
 
 
 def test_trainer_update_applies_actor_ascent_and_critic_adam_step() -> None:
@@ -119,11 +147,29 @@ def test_trainer_update_applies_actor_ascent_and_critic_adam_step() -> None:
         critic.get_parameters()["output"],
         jnp.array([0.1]),
     )
-    assert jnp.isclose(update_result.critic_loss, 0.6925)
+    assert jnp.isclose(update_result.critic_loss, 0.4281255)
     assert jnp.isclose(update_result.average_discounted_return, 1.25)
 
 
-def test_trainer_critic_uses_discounted_reward_to_go_targets() -> None:
+def test_trainer_trains_actor_on_terminal_step() -> None:
+    actor = _actor(jnp.array([0.0, 0.0]))
+    critic = _critic()
+    trainer = _trainer(actor=actor, critic=critic)
+
+    trainer.update_from_episode(
+        _episode(
+            rewards=(1.0,),
+            action_vectors=((1, 1),),
+        )
+    )
+
+    assert jnp.allclose(
+        actor.get_parameters()["output"],
+        jnp.array([-0.1, 0.1]),
+    )
+
+
+def test_trainer_critic_uses_one_step_td_targets() -> None:
     actor = _actor(jnp.array([0.0, 0.0]))
     critic = _critic()
     trainer = _trainer(actor=actor, critic=critic)
@@ -139,6 +185,67 @@ def test_trainer_critic_uses_discounted_reward_to_go_targets() -> None:
         critic.get_parameters()["output"],
         jnp.array([0.1]),
     )
+
+
+def test_trainer_stores_episode_transitions_in_replay_buffer() -> None:
+    replay_config = ReplayConfig(
+        buffer_size=10,
+        batch_size=1,
+        warmup_size=10,
+    )
+    replay_buffer = ReplayBuffer(buffer_size=replay_config.buffer_size)
+    trainer = _trainer(
+        replay_config=replay_config,
+        replay_buffer=replay_buffer,
+    )
+
+    trainer.update_from_episode(
+        _episode(
+            rewards=(1.0, 1.0),
+            action_vectors=((1, 1), (1, 1)),
+        )
+    )
+
+    assert len(replay_buffer) == 2
+
+
+def test_trainer_uses_ready_replay_buffer_for_critic_update() -> None:
+    actor = _actor(jnp.array([0.0, 0.0]))
+    critic = _critic()
+    replay_config = ReplayConfig(
+        buffer_size=10,
+        batch_size=1,
+        warmup_size=1,
+    )
+    replay_buffer = ReplayBuffer(
+        buffer_size=replay_config.buffer_size,
+        rng=np.random.default_rng(1),
+    )
+    replay_buffer.add(
+        ReplayTransition(
+            global_state=jnp.zeros(4),
+            local_actor_states=jnp.zeros((2, 2)),
+            action_vector=jnp.array([0, 0], dtype=jnp.int32),
+            reward=5.0,
+            next_global_state=jnp.zeros(4),
+            terminal=True,
+        )
+    )
+    trainer = _trainer(
+        actor=actor,
+        critic=critic,
+        replay_config=replay_config,
+        replay_buffer=replay_buffer,
+    )
+
+    trainer.update_from_episode(
+        _episode(
+            rewards=(0.0,),
+            action_vectors=((1, 1),),
+        )
+    )
+
+    assert jnp.allclose(critic.get_parameters()["output"], jnp.array([0.1]))
 
 
 def test_trainer_actor_bootstraps_nonterminal_td_advantages() -> None:
@@ -228,16 +335,21 @@ def _episode(
     action_vectors: tuple[tuple[int, ...], ...],
 ) -> EpisodeResult:
     steps = []
+    local_belief_steps = tuple(
+        (
+            jnp.array([1.0 + 0.5 * step_index, 0.0]),
+            jnp.array([0.0, 1.0 + 0.5 * step_index]),
+        )
+        for step_index in range(len(rewards) + 1)
+    )
     for step_index, (reward, action_vector) in enumerate(
         zip(rewards, action_vectors, strict=True)
     ):
         steps.append(
             SimulationStep(
                 timestep=step_index + 1,
-                local_beliefs=(
-                    jnp.array([1.0 + 0.5 * step_index, 0.0]),
-                    jnp.array([0.0, 1.0 + 0.5 * step_index]),
-                ),
+                local_beliefs=local_belief_steps[step_index],
+                next_local_beliefs=local_belief_steps[step_index + 1],
                 action_vector=action_vector,
                 communication_events=(),
                 reward=reward,

@@ -113,6 +113,7 @@ class LineSimulation(Simulation):
                 SimulationStep(
                     timestep=timestep,
                     local_beliefs=local_beliefs,
+                    next_local_beliefs=next_local_beliefs,
                     action_vector=tuple(decision.selection for decision in decisions),
                     communication_events=communication_events,
                     reward=self.reward_function(

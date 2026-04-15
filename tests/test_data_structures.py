@@ -15,7 +15,22 @@ def test_simulation_step_requires_action_per_agent() -> None:
         SimulationStep(
             timestep=1,
             local_beliefs=("agent-0", "agent-1"),
+            next_local_beliefs=("agent-0-next", "agent-1-next"),
             action_vector=(0,),
+            communication_events=(),
+            reward=0.0,
+            true_positions=("true-0", "true-1"),
+            extra={},
+        )
+
+
+def test_simulation_step_requires_successor_belief_per_agent() -> None:
+    with pytest.raises(ValueError, match="one successor belief per local belief"):
+        SimulationStep(
+            timestep=1,
+            local_beliefs=("agent-0", "agent-1"),
+            next_local_beliefs=("agent-0-next",),
+            action_vector=(0, 0),
             communication_events=(),
             reward=0.0,
             true_positions=("true-0", "true-1"),
@@ -39,6 +54,7 @@ def test_episode_result_from_steps_stores_simulation_outputs() -> None:
     step = SimulationStep(
         timestep=3,
         local_beliefs=("agent-0", "agent-1"),
+        next_local_beliefs=("agent-0-next", "agent-1-next"),
         action_vector=(1, 0),
         communication_events=((0, 1),),
         reward=-1.25,
@@ -57,6 +73,7 @@ def test_simulation_step_requires_nonnegative_timestep() -> None:
         SimulationStep(
             timestep=-1,
             local_beliefs=("agent-0",),
+            next_local_beliefs=("agent-0-next",),
             action_vector=(0,),
             communication_events=(),
             reward=0.0,
@@ -70,10 +87,10 @@ def test_simulation_step_requires_finite_reward() -> None:
         SimulationStep(
             timestep=1,
             local_beliefs=("agent-0",),
+            next_local_beliefs=("agent-0-next",),
             action_vector=(0,),
             communication_events=(),
             reward=float("nan"),
             true_positions=("true-0",),
             extra={},
         )
-

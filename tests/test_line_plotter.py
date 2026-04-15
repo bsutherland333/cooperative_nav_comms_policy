@@ -26,6 +26,10 @@ def _episode_with_events(
             LocalBelief(estimate=np.array([0.0, 1.0]), covariance=prior_covariance),
             LocalBelief(estimate=np.array([0.1, 1.1]), covariance=prior_covariance),
         ),
+        next_local_beliefs=(
+            LocalBelief(estimate=np.array([0.0, 1.0]), covariance=prior_covariance),
+            LocalBelief(estimate=np.array([0.1, 1.1]), covariance=prior_covariance),
+        ),
         action_vector=(0, 0),
         communication_events=communication_events,
         reward=-1.0,

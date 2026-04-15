@@ -20,6 +20,7 @@ from simulation.state_encoding import (
 )
 from simulation.line_sim.plotter import LinePlotter
 from simulation.line_sim.sim import LineSimulation
+from training.replay import ReplayBuffer, ReplayConfig
 from training.trainer import SimulationType, Trainer
 
 
@@ -40,6 +41,9 @@ class RunConfig:
     discount_factor: float
     entropy_coefficient: float
     communication_cost: float
+    replay_buffer_size: int
+    replay_batch_size: int
+    replay_warmup_size: int
 
 
 def parse_args(argv: Sequence[str] | None) -> RunConfig:
@@ -63,11 +67,14 @@ def parse_args(argv: Sequence[str] | None) -> RunConfig:
     parser.add_argument("--num-agents", default=2, type=_positive_int)
     parser.add_argument("--num-iters", default=250, type=_positive_int)
     parser.add_argument("--num-steps", default=120, type=_positive_int)
-    parser.add_argument("--actor-rate", default=5e-3, type=_positive_float)
-    parser.add_argument("--critic-rate", default=5e-4, type=_positive_float)
+    parser.add_argument("--actor-rate", default=1e-2, type=_positive_float)
+    parser.add_argument("--critic-rate", default=1e-3, type=_positive_float)
     parser.add_argument("--discount", default=0.9, type=_unit_interval_float)
-    parser.add_argument("--entropy", default=0.01, type=_nonnegative_float)
-    parser.add_argument("--comm-cost", default=0.03, type=_nonnegative_float)
+    parser.add_argument("--entropy", default=0.0, type=_nonnegative_float)
+    parser.add_argument("--comm-cost", default=0.05, type=_nonnegative_float)
+    parser.add_argument("--replay-buffer-size", default=6000, type=_nonnegative_int)
+    parser.add_argument("--replay-batch-size", default=60, type=_positive_int)
+    parser.add_argument("--replay-warmup-size", default=60, type=_nonnegative_int)
     args = parser.parse_args(argv)
 
     return RunConfig(
@@ -84,6 +91,9 @@ def parse_args(argv: Sequence[str] | None) -> RunConfig:
         discount_factor=args.discount,
         entropy_coefficient=args.entropy,
         communication_cost=args.comm_cost,
+        replay_buffer_size=args.replay_buffer_size,
+        replay_batch_size=args.replay_batch_size,
+        replay_warmup_size=args.replay_warmup_size,
     )
 
 
@@ -104,6 +114,7 @@ def run_training(config: RunConfig) -> None:
     simulation_type = build_simulation_type(config)
     actor = build_actor(config)
     critic = build_critic(config)
+    replay_config = build_replay_config(config)
 
     trainer = Trainer(
         actor=actor,
@@ -113,6 +124,8 @@ def run_training(config: RunConfig) -> None:
         critic_learning_rate=config.critic_learning_rate,
         discount_factor=config.discount_factor,
         entropy_coefficient=config.entropy_coefficient,
+        replay_config=replay_config,
+        replay_buffer=ReplayBuffer(buffer_size=replay_config.buffer_size),
     )
     training_iterations: list[int] = []
     reward_sums: list[float] = []
@@ -211,6 +224,15 @@ def build_critic(config: RunConfig) -> Critic:
         state_size=provider.input_size,
         function_provider=provider,
         critic_encoder=critic_encoder,
+    )
+
+
+def build_replay_config(config: RunConfig) -> ReplayConfig:
+    """Construct the experience replay settings for training."""
+    return ReplayConfig(
+        buffer_size=config.replay_buffer_size,
+        batch_size=config.replay_batch_size,
+        warmup_size=config.replay_warmup_size,
     )
 
 

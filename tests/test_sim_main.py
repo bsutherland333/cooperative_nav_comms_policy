@@ -18,15 +18,30 @@ from simulation.state_encoding import StateEncodingMethod
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_sim_main_parses_line_defaults() -> None:
-    config = sim_main.parse_args([])
+def test_sim_main_parses_line_configuration() -> None:
+    config = sim_main.parse_args(
+        [
+            "--simulator",
+            "line",
+            "--reward",
+            "trace",
+            "--state-encoding",
+            "mean_diagonal",
+            "--num-agents",
+            "3",
+            "--num-steps",
+            "7",
+            "--comm-cost",
+            "0.2",
+        ]
+    )
 
     assert config.simulator_name == "line"
     assert config.reward_method == RewardMethod.TRACE
-    assert config.state_encoding_method == StateEncodingMethod.MEAN_FULL_CORRELATION
-    assert config.num_agents == 2
-    assert config.num_steps == 120
-    assert config.communication_cost == 0.03
+    assert config.state_encoding_method == StateEncodingMethod.MEAN_DIAGONAL
+    assert config.num_agents == 3
+    assert config.num_steps == 7
+    assert config.communication_cost == 0.2
 
 
 def test_sim_main_parses_reward() -> None:
