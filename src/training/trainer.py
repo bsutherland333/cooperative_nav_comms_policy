@@ -10,7 +10,7 @@ from policy.actor import Actor
 from policy.critic import Critic
 from simulation.base import Simulation
 from simulation.data_structures import EpisodeResult
-from training.replay import ReplayBuffer, ReplayConfig, ReplayTransition
+from training.replay import ReplayBatch, ReplayBuffer, ReplayConfig, ReplayTransition
 
 SimulationType = type[Simulation]
 
@@ -107,7 +107,6 @@ class Trainer:
             )
 
         training_arrays = self._episode_training_arrays(episode)
-        self.replay_buffer.add_many(self._episode_replay_transitions(training_arrays))
 
         actor_parameters = self.actor.get_parameters()
         critic_parameters = self.critic.get_parameters()
@@ -127,6 +126,7 @@ class Trainer:
         )
 
         updated_critic_loss = self._apply_critic_updates(training_arrays)
+        self.replay_buffer.add_many(self._episode_replay_transitions(training_arrays))
         return TrainingUpdateResult(
             critic_loss=updated_critic_loss,
             average_discounted_return=float(jnp.mean(training_arrays.returns)),
@@ -136,40 +136,19 @@ class Trainer:
         self,
         training_arrays: _EpisodeTrainingArrays,
     ) -> float:
-        """Apply replay critic updates when available, otherwise use fresh data."""
-        replay_ready = (
-            self.replay_config.buffer_size > 0
-            and len(self.replay_buffer) >= self.replay_config.warmup_size
+        """Apply one critic update from old replay data plus the fresh episode."""
+        replay_batch = self._sample_replay_batch()
+        critic_training_arrays = _combine_training_arrays(
+            training_arrays=training_arrays,
+            replay_batch=replay_batch,
         )
-        if replay_ready:
-            batch = self.replay_buffer.sample(self.replay_config.batch_size)
-            critic_loss_gradient = self._critic_gradient_function(
-                self.critic.get_parameters(),
-                batch.global_states,
-                batch.rewards,
-                batch.next_global_states,
-                batch.terminals,
-            )
-            self.critic.update(
-                gradient=critic_loss_gradient,
-                learning_rate=self.critic_learning_rate,
-            )
-            return float(
-                self._critic_loss_function(
-                    self.critic.get_parameters(),
-                    batch.global_states,
-                    batch.rewards,
-                    batch.next_global_states,
-                    batch.terminals,
-                )
-            )
 
         critic_loss_gradient = self._critic_gradient_function(
             self.critic.get_parameters(),
-            training_arrays.global_states,
-            training_arrays.rewards,
-            training_arrays.next_global_states,
-            training_arrays.terminals,
+            critic_training_arrays.global_states,
+            critic_training_arrays.rewards,
+            critic_training_arrays.next_global_states,
+            critic_training_arrays.terminals,
         )
         self.critic.update(
             gradient=critic_loss_gradient,
@@ -178,12 +157,22 @@ class Trainer:
         return float(
             self._critic_loss_function(
                 self.critic.get_parameters(),
-                training_arrays.global_states,
-                training_arrays.rewards,
-                training_arrays.next_global_states,
-                training_arrays.terminals,
+                critic_training_arrays.global_states,
+                critic_training_arrays.rewards,
+                critic_training_arrays.next_global_states,
+                critic_training_arrays.terminals,
             )
         )
+
+    def _sample_replay_batch(self) -> ReplayBatch | None:
+        """Sample old replay data before adding the current trajectory."""
+        replay_ready = (
+            self.replay_config.buffer_size > 0
+            and len(self.replay_buffer) >= self.replay_config.warmup_size
+        )
+        if not replay_ready:
+            return None
+        return self.replay_buffer.sample(self.replay_config.batch_size)
 
     def _episode_training_arrays(self, episode: EpisodeResult) -> _EpisodeTrainingArrays:
         """Encode one episode into stacked arrays for vectorized JAX updates."""
@@ -346,6 +335,43 @@ class Trainer:
         )
         residual = values - targets
         return jnp.mean(0.5 * residual**2)
+
+
+def _combine_training_arrays(
+    training_arrays: _EpisodeTrainingArrays,
+    replay_batch: ReplayBatch | None,
+) -> _EpisodeTrainingArrays:
+    """Return critic training arrays with old replay data before fresh data."""
+    if replay_batch is None:
+        return training_arrays
+
+    return _EpisodeTrainingArrays(
+        global_states=jnp.concatenate(
+            (replay_batch.global_states, training_arrays.global_states),
+            axis=0,
+        ),
+        next_global_states=jnp.concatenate(
+            (replay_batch.next_global_states, training_arrays.next_global_states),
+            axis=0,
+        ),
+        local_actor_states=jnp.concatenate(
+            (replay_batch.local_actor_states, training_arrays.local_actor_states),
+            axis=0,
+        ),
+        action_vectors=jnp.concatenate(
+            (replay_batch.action_vectors, training_arrays.action_vectors),
+            axis=0,
+        ),
+        rewards=jnp.concatenate((replay_batch.rewards, training_arrays.rewards), axis=0),
+        terminals=jnp.concatenate(
+            (replay_batch.terminals, training_arrays.terminals),
+            axis=0,
+        ),
+        returns=jnp.concatenate(
+            (jnp.zeros_like(replay_batch.rewards), training_arrays.returns),
+            axis=0,
+        ),
+    )
 
 
 def _discounted_returns(

@@ -209,7 +209,7 @@ def test_trainer_stores_episode_transitions_in_replay_buffer() -> None:
     assert len(replay_buffer) == 2
 
 
-def test_trainer_uses_ready_replay_buffer_for_critic_update() -> None:
+def test_trainer_combines_old_replay_and_current_trajectory_for_critic_update() -> None:
     actor = _actor(jnp.array([0.0, 0.0]))
     critic = _critic()
     replay_config = ReplayConfig(
@@ -240,12 +240,13 @@ def test_trainer_uses_ready_replay_buffer_for_critic_update() -> None:
 
     trainer.update_from_episode(
         _episode(
-            rewards=(0.0,),
+            rewards=(-5.0,),
             action_vectors=((1, 1),),
         )
     )
 
-    assert jnp.allclose(critic.get_parameters()["output"], jnp.array([0.1]))
+    assert jnp.allclose(critic.get_parameters()["output"], jnp.array([0.0]))
+    assert len(replay_buffer) == 2
 
 
 def test_trainer_actor_bootstraps_nonterminal_td_advantages() -> None:
