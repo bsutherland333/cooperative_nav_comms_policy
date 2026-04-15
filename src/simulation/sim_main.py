@@ -22,6 +22,8 @@ from simulation.rewards import Reward, RewardMethod
 from simulation.state_encoding import ActorEncoder, StateEncodingMethod
 from simulation.line_sim.plotter import LinePlotter
 from simulation.line_sim.sim import LineSimulation
+from simulation.plane_sim.plotter import PlanePlotter
+from simulation.plane_sim.sim import PlaneSimulation
 
 
 FAKE_POLICY_NO_COMMUNICATION_BIAS = 4.0
@@ -103,7 +105,12 @@ def main(argv: Sequence[str] | None = None) -> int:
 def run_standalone_sim(config: StandaloneSimConfig) -> None:
     """Build a fake policy, run one episode, and display its verification plot."""
     actor = build_fake_actor(config)
-    simulation = build_simulation(config, actor)
+    reward_function = build_reward_function(config)
+    simulation = build_simulation(
+        config=config,
+        actor=actor,
+        reward_function=reward_function,
+    )
     episode = simulation.run(exploration=True)
     plotter = build_plotter(config)
 
@@ -128,7 +135,7 @@ def build_fake_actor(config: StandaloneSimConfig) -> Actor:
     logits = logits.at[0].set(FAKE_POLICY_NO_COMMUNICATION_BIAS)
     actor_encoder = ActorEncoder(
         num_agents=config.num_agents,
-        vehicle_state_size=LineSimulation.vehicle_state_size,
+        vehicle_state_size=_vehicle_state_size(config),
         encoding_method=config.state_encoding_method,
     )
     provider = FixedLogitProvider(
@@ -143,17 +150,33 @@ def build_fake_actor(config: StandaloneSimConfig) -> Actor:
     )
 
 
-def build_simulation(config: StandaloneSimConfig, actor: Actor) -> Simulation:
+def build_reward_function(config: StandaloneSimConfig) -> Reward:
+    """Construct the scalar reward function for simulator transitions."""
+    return Reward(
+        reward_method=config.reward_method,
+        communication_cost=config.communication_cost,
+    )
+
+
+def build_simulation(
+    config: StandaloneSimConfig,
+    actor: Actor,
+    reward_function: Reward,
+) -> Simulation:
     """Select the requested standalone simulator."""
     if config.simulator_name == "line":
         return LineSimulation(
             actor=actor,
             num_agents=config.num_agents,
             num_steps=config.num_steps,
-            reward_function=Reward(
-                reward_method=config.reward_method,
-                communication_cost=config.communication_cost,
-            ),
+            reward_function=reward_function,
+        )
+    if config.simulator_name == "plane":
+        return PlaneSimulation(
+            actor=actor,
+            num_agents=config.num_agents,
+            num_steps=config.num_steps,
+            reward_function=reward_function,
         )
 
     raise NotImplementedError(
@@ -165,9 +188,21 @@ def build_plotter(config: StandaloneSimConfig) -> Plotter:
     """Select the requested standalone plotter."""
     if config.simulator_name == "line":
         return LinePlotter()
+    if config.simulator_name == "plane":
+        return PlanePlotter()
 
     raise NotImplementedError(
         f"No standalone plotter is registered for '{config.simulator_name}'."
+    )
+
+
+def _vehicle_state_size(config: StandaloneSimConfig) -> int:
+    if config.simulator_name == "line":
+        return LineSimulation.vehicle_state_size
+    if config.simulator_name == "plane":
+        return PlaneSimulation.vehicle_state_size
+    raise NotImplementedError(
+        f"No standalone simulator is registered for '{config.simulator_name}'."
     )
 
 

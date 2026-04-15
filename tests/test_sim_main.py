@@ -11,7 +11,8 @@ import pytest
 from policy.actor import Actor
 from simulation import sim_main
 from simulation.line_sim.sim import LineSimulation
-from simulation.rewards import Reward, RewardMethod
+from simulation.plane_sim.sim import PlaneSimulation
+from simulation.rewards import RewardMethod
 from simulation.state_encoding import StateEncodingMethod
 
 
@@ -66,12 +67,43 @@ def test_sim_main_builds_line_simulation() -> None:
         communication_cost=0.3,
     )
     actor = sim_main.build_fake_actor(config)
+    reward_function = sim_main.build_reward_function(config)
 
-    simulation = sim_main.build_simulation(config, actor)
+    simulation = sim_main.build_simulation(
+        config=config,
+        actor=actor,
+        reward_function=reward_function,
+    )
 
     assert isinstance(actor, Actor)
     assert isinstance(simulation, LineSimulation)
-    assert isinstance(simulation.reward_function, Reward)
+    assert simulation.reward_function is reward_function
+    assert simulation.reward_function.reward_method == RewardMethod.TRACE
+    assert simulation.reward_function.communication_cost == 0.3
+
+
+def test_sim_main_builds_plane_simulation() -> None:
+    config = sim_main.StandaloneSimConfig(
+        simulator_name="plane",
+        reward_method=RewardMethod.TRACE,
+        state_encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
+        num_agents=2,
+        num_steps=1,
+        communication_cost=0.3,
+    )
+    actor = sim_main.build_fake_actor(config)
+    reward_function = sim_main.build_reward_function(config)
+
+    simulation = sim_main.build_simulation(
+        config=config,
+        actor=actor,
+        reward_function=reward_function,
+    )
+
+    assert isinstance(actor, Actor)
+    assert actor.actor_encoder.vehicle_state_size == PlaneSimulation.vehicle_state_size
+    assert isinstance(simulation, PlaneSimulation)
+    assert simulation.reward_function is reward_function
     assert simulation.reward_function.reward_method == RewardMethod.TRACE
     assert simulation.reward_function.communication_cost == 0.3
 
