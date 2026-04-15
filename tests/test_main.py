@@ -112,6 +112,7 @@ def test_run_training_orchestrates_training_and_status_reporting(
         replay_buffer_size=17,
         replay_batch_size=5,
         replay_warmup_size=7,
+        eval_plot_interval=None,
     )
 
     monkeypatch.setattr(
@@ -217,6 +218,7 @@ def test_run_training_plots_final_evaluation_after_keyboard_interrupt(
         replay_buffer_size=13,
         replay_batch_size=4,
         replay_warmup_size=6,
+        eval_plot_interval=None,
     )
 
     monkeypatch.setattr(
@@ -248,6 +250,72 @@ def test_run_training_plots_final_evaluation_after_keyboard_interrupt(
         "exploration": False,
     }
     assert final_plotter.plot_calls[0]["show"] is True
+
+
+def test_run_training_plots_intermediate_evaluations_without_blocking(
+    monkeypatch: Any,
+) -> None:
+    RecordingTrainer.instances = []
+    FakePlotter.instances = []
+    FakeSimulation.instances = []
+    show_calls: list[dict[str, Any]] = []
+    pause_calls: list[float] = []
+    config = main.RunConfig(
+        simulator_name="line",
+        function_type="fake_function",
+        reward_method=RewardMethod.TRACE,
+        state_encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
+        num_agents=3,
+        num_training_iterations=3,
+        num_steps=60,
+        poly_degree=2,
+        actor_learning_rate=0.1,
+        critic_learning_rate=0.2,
+        discount_factor=0.9,
+        entropy_coefficient=0.01,
+        communication_cost=0.3,
+        replay_buffer_size=17,
+        replay_batch_size=5,
+        replay_warmup_size=7,
+        eval_plot_interval=2,
+    )
+
+    monkeypatch.setattr(
+        main,
+        "build_function_provider",
+        _fake_function_provider,
+    )
+    monkeypatch.setattr(main, "build_simulation_type", lambda config: FakeSimulation)
+    monkeypatch.setattr(main, "build_plotter", lambda config: FakePlotter())
+    monkeypatch.setattr(main, "Trainer", RecordingTrainer)
+    monkeypatch.setattr(
+        main.plt,
+        "show",
+        lambda *args, **kwargs: show_calls.append(dict(kwargs)),
+    )
+    monkeypatch.setattr(main.plt, "pause", lambda seconds: pause_calls.append(seconds))
+    perf_counter_values = iter((0.0, 10.0, 10.0, 12.0, 12.0, 16.0))
+    monkeypatch.setattr(
+        main.time,
+        "perf_counter",
+        lambda: next(perf_counter_values),
+    )
+
+    main.run_training(config)
+
+    trainer = RecordingTrainer.instances[0]
+    assert trainer.training_episode_count == 3
+    assert len(FakeSimulation.instances) == 2
+    assert [plotter.plot_calls[0]["block"] for plotter in FakePlotter.instances] == [
+        False,
+        True,
+    ]
+    assert [plotter.plot_calls[0]["show"] for plotter in FakePlotter.instances] == [
+        True,
+        True,
+    ]
+    assert show_calls == [{"block": False}, {}]
+    assert pause_calls == [0.001, 0.001]
 
 
 def test_function_type_cli_arg_is_parsed() -> None:
@@ -311,6 +379,7 @@ def test_encoder_registration_uses_simulator_vehicle_state_size() -> None:
         replay_buffer_size=13,
         replay_batch_size=4,
         replay_warmup_size=6,
+        eval_plot_interval=None,
     )
 
     actor = main.build_actor(config)
@@ -348,6 +417,7 @@ def test_encoder_registration_requires_simulator_vehicle_state_size() -> None:
         replay_buffer_size=13,
         replay_batch_size=4,
         replay_warmup_size=6,
+        eval_plot_interval=None,
     )
 
     with pytest.raises(NotImplementedError, match="vehicle_state_size"):
@@ -406,6 +476,12 @@ def test_replay_cli_args_are_parsed() -> None:
     assert config.replay_warmup_size == 10
 
 
+def test_eval_plot_interval_cli_arg_is_parsed() -> None:
+    config = main.parse_args(["--eval-plot-interval", "7"])
+
+    assert config.eval_plot_interval == 7
+
+
 def test_function_type_cli_arg_rejects_polynomial_degree() -> None:
     with pytest.raises(SystemExit):
         main.parse_args(["--function", "polynomial", "4"])
@@ -431,6 +507,7 @@ def test_line_simulator_registration_uses_configured_dimensions(
         replay_buffer_size=13,
         replay_batch_size=4,
         replay_warmup_size=6,
+        eval_plot_interval=None,
     )
     monkeypatch.setattr(
         main,
@@ -470,6 +547,7 @@ def test_polynomial_function_provider_registration_uses_encoder_dimensions() -> 
         replay_buffer_size=13,
         replay_batch_size=4,
         replay_warmup_size=6,
+        eval_plot_interval=None,
     )
     actor_encoder = ActorEncoder(
         num_agents=config.num_agents,

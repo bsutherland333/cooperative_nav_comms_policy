@@ -61,6 +61,7 @@ class Plotter(ABC):
         n_sigma: float,
         output_path: str | Path | None,
         show: bool,
+        block: bool = True,
     ) -> None:
         """Plot an episode result.
 

@@ -74,6 +74,7 @@ class FakeSimulation(Simulation):
         n_sigma: float,
         output_path: str | Path | None,
         show: bool,
+        block: bool = True,
     ) -> None:
         self.plot_calls.append(
             {
@@ -81,6 +82,7 @@ class FakeSimulation(Simulation):
                 "n_sigma": n_sigma,
                 "output_path": output_path,
                 "show": show,
+                "block": block,
             }
         )
 
@@ -100,6 +102,7 @@ class FakePlotter(Plotter):
         n_sigma: float,
         output_path: str | Path | None,
         show: bool,
+        block: bool = True,
     ) -> None:
         self.plot_calls.append(
             {
@@ -107,5 +110,6 @@ class FakePlotter(Plotter):
                 "n_sigma": n_sigma,
                 "output_path": output_path,
                 "show": show,
+                "block": block,
             }
         )

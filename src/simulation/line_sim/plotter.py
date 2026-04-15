@@ -18,6 +18,7 @@ class LinePlotter(Plotter):
         n_sigma: float,
         output_path: str | Path | None,
         show: bool,
+        block: bool = True,
     ) -> None:
         """Plot true and locally estimated self trajectories with uncertainty."""
         _plot_episode(
@@ -25,6 +26,7 @@ class LinePlotter(Plotter):
             n_sigma=n_sigma,
             output_path=output_path,
             show=show,
+            block=block,
         )
 
 
@@ -33,6 +35,7 @@ def _plot_episode(
     n_sigma: float,
     output_path: str | Path | None,
     show: bool,
+    block: bool = True,
 ) -> tuple[plt.Figure, plt.Axes]:
     """Build the matplotlib figure for a line-simulation episode."""
     if output_path is None and not show:
@@ -88,9 +91,18 @@ def _plot_episode(
     if output_path is not None:
         figure.savefig(output_path)
     if show:
-        plt.show()
+        _show_plot(block=block)
 
     return figure, axis
+
+
+def _show_plot(block: bool) -> None:
+    if block:
+        plt.show()
+        return
+
+    plt.show(block=False)
+    plt.pause(0.001)
 
 
 def _plot_range_measurements(

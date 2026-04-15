@@ -12,6 +12,7 @@ from policy.actor import Actor
 from policy.critic import Critic
 from policy.function_provider import FunctionProvider, PolynomialFunctionProvider
 from simulation.base import Plotter
+from simulation.data_structures import EpisodeResult
 from simulation.rewards import Reward, RewardMethod
 from simulation.state_encoding import (
     ActorEncoder,
@@ -44,6 +45,7 @@ class RunConfig:
     replay_buffer_size: int
     replay_batch_size: int
     replay_warmup_size: int
+    eval_plot_interval: int | None
 
 
 def parse_args(argv: Sequence[str] | None) -> RunConfig:
@@ -65,9 +67,9 @@ def parse_args(argv: Sequence[str] | None) -> RunConfig:
     parser.add_argument("--function", default="poly")
     parser.add_argument("--poly-degree", default=2, type=_nonnegative_int)
     parser.add_argument("--num-agents", default=2, type=_positive_int)
-    parser.add_argument("--num-iters", default=250, type=_positive_int)
+    parser.add_argument("--num-iters", default=2500, type=_positive_int)
     parser.add_argument("--num-steps", default=120, type=_positive_int)
-    parser.add_argument("--actor-rate", default=1e-2, type=_positive_float)
+    parser.add_argument("--actor-rate", default=2.5e-3, type=_positive_float)
     parser.add_argument("--critic-rate", default=1e-3, type=_positive_float)
     parser.add_argument("--discount", default=0.9, type=_unit_interval_float)
     parser.add_argument("--entropy", default=0.0, type=_nonnegative_float)
@@ -75,6 +77,7 @@ def parse_args(argv: Sequence[str] | None) -> RunConfig:
     parser.add_argument("--replay-buffer-size", default=6000, type=_nonnegative_int)
     parser.add_argument("--replay-batch-size", default=60, type=_positive_int)
     parser.add_argument("--replay-warmup-size", default=60, type=_nonnegative_int)
+    parser.add_argument("--eval-plot-interval", type=_positive_int)
     args = parser.parse_args(argv)
 
     return RunConfig(
@@ -94,6 +97,7 @@ def parse_args(argv: Sequence[str] | None) -> RunConfig:
         replay_buffer_size=args.replay_buffer_size,
         replay_batch_size=args.replay_batch_size,
         replay_warmup_size=args.replay_warmup_size,
+        eval_plot_interval=args.eval_plot_interval,
     )
 
 
@@ -132,8 +136,11 @@ def run_training(config: RunConfig) -> None:
     average_discounted_returns: list[float] = []
     critic_losses: list[float] = []
     eta_iteration_durations: list[float] = []
+    has_intermediate_plots = False
     try:
         for iteration_index in range(config.num_training_iterations):
+            if has_intermediate_plots:
+                _process_plot_events()
             iteration_started_at = time.perf_counter()
             training_episode = trainer.collect_training_episode()
             update_result = trainer.update_from_episode(training_episode)
@@ -160,18 +167,81 @@ def run_training(config: RunConfig) -> None:
                 f"critic_loss={update_result.critic_loss:.6g} "
                 f"eta={_format_eta(eta_seconds)}"
             )
+            if _should_plot_intermediate_evaluation(
+                config=config,
+                training_iteration=training_iteration,
+            ):
+                evaluation_episode = simulation_type(actor).run(exploration=False)
+                _plot_evaluation_and_training_status(
+                    config=config,
+                    episode=evaluation_episode,
+                    training_iterations=training_iterations,
+                    reward_sums=reward_sums,
+                    average_discounted_returns=average_discounted_returns,
+                    critic_losses=critic_losses,
+                    block=False,
+                )
+                has_intermediate_plots = True
     except KeyboardInterrupt:
         print("Training interrupted; running final evaluation.", file=sys.stderr)
 
     final_simulation = simulation_type(actor)
     final_episode = final_simulation.run(exploration=False)
-    final_plotter = build_plotter(config)
-    final_plotter.plot(
+    _plot_evaluation_and_training_status(
+        config=config,
         episode=final_episode,
+        training_iterations=training_iterations,
+        reward_sums=reward_sums,
+        average_discounted_returns=average_discounted_returns,
+        critic_losses=critic_losses,
+        block=True,
+    )
+
+
+def _should_plot_intermediate_evaluation(
+    config: RunConfig,
+    training_iteration: int,
+) -> bool:
+    return (
+        config.eval_plot_interval is not None
+        and training_iteration % config.eval_plot_interval == 0
+        and training_iteration < config.num_training_iterations
+    )
+
+
+def _plot_evaluation_and_training_status(
+    config: RunConfig,
+    episode: EpisodeResult,
+    training_iterations: list[int],
+    reward_sums: list[float],
+    average_discounted_returns: list[float],
+    critic_losses: list[float],
+    block: bool,
+) -> None:
+    plotter = build_plotter(config)
+    plotter.plot(
+        episode=episode,
         n_sigma=2.0,
         output_path=None,
         show=True,
+        block=block,
     )
+    _plot_training_status(
+        training_iterations=training_iterations,
+        reward_sums=reward_sums,
+        average_discounted_returns=average_discounted_returns,
+        critic_losses=critic_losses,
+        block=block,
+    )
+
+
+def _plot_training_status(
+    training_iterations: list[int],
+    reward_sums: list[float],
+    average_discounted_returns: list[float],
+    critic_losses: list[float],
+    block: bool,
+) -> None:
     figure, axes = plt.subplots(nrows=3, sharex=True)
     axes[0].plot(training_iterations, reward_sums, linewidth=1.0)
     axes[0].set_ylabel("reward sum")
@@ -185,7 +255,20 @@ def run_training(config: RunConfig) -> None:
     axes[2].grid(True, alpha=0.3)
     figure.suptitle("Training status")
     figure.tight_layout()
-    plt.show()
+    _show_plots(block=block)
+
+
+def _show_plots(block: bool) -> None:
+    if block:
+        plt.show()
+        return
+
+    plt.show(block=False)
+    _process_plot_events()
+
+
+def _process_plot_events() -> None:
+    plt.pause(0.001)
 
 
 def build_actor(config: RunConfig) -> Actor:
