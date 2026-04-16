@@ -257,6 +257,7 @@ def test_run_training_plots_final_evaluation_after_keyboard_interrupt(
 
 def test_run_training_plots_intermediate_evaluations_without_blocking(
     monkeypatch: Any,
+    capsys: Any,
 ) -> None:
     RecordingTrainer.instances = []
     FakePlotter.instances = []
@@ -306,9 +307,16 @@ def test_run_training_plots_intermediate_evaluations_without_blocking(
 
     main.run_training(config)
 
+    captured = capsys.readouterr()
     trainer = RecordingTrainer.instances[0]
     assert trainer.training_episode_count == 3
     assert len(FakeSimulation.instances) == 2
+    assert (
+        "intermediate_evaluation training_iteration=2 "
+        "total_reward=0 total_uncertainty=0"
+        in captured.out
+    )
+    assert "final_evaluation total_reward=0 total_uncertainty=0" in captured.out
     assert [plotter.plot_calls[0]["block"] for plotter in FakePlotter.instances] == [
         False,
         True,

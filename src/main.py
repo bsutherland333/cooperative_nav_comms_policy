@@ -176,6 +176,8 @@ def run_training(config: RunConfig) -> None:
                 _plot_evaluation_and_training_status(
                     config=config,
                     episode=evaluation_episode,
+                    status_label="!!! intermediate_evaluation",
+                    training_iteration=training_iteration,
                     training_iterations=training_iterations,
                     reward_sums=reward_sums,
                     average_discounted_returns=average_discounted_returns,
@@ -188,14 +190,11 @@ def run_training(config: RunConfig) -> None:
 
     final_simulation = simulation_type(actor)
     final_episode = final_simulation.run(exploration=False)
-    print(
-        "final_evaluation "
-        f"total_reward={_episode_total_reward(final_episode):.6g} "
-        f"total_uncertainty={_episode_total_uncertainty(final_episode):.6g}"
-    )
     _plot_evaluation_and_training_status(
         config=config,
         episode=final_episode,
+        status_label="final_evaluation",
+        training_iteration=None,
         training_iterations=training_iterations,
         reward_sums=reward_sums,
         average_discounted_returns=average_discounted_returns,
@@ -218,12 +217,19 @@ def _should_plot_intermediate_evaluation(
 def _plot_evaluation_and_training_status(
     config: RunConfig,
     episode: EpisodeResult,
+    status_label: str,
+    training_iteration: int | None,
     training_iterations: list[int],
     reward_sums: list[float],
     average_discounted_returns: list[float],
     critic_losses: list[float],
     block: bool,
 ) -> None:
+    _print_evaluation_status(
+        status_label=status_label,
+        episode=episode,
+        training_iteration=training_iteration,
+    )
     plotter = build_plotter(config)
     plotter.plot(
         episode=episode,
@@ -238,6 +244,22 @@ def _plot_evaluation_and_training_status(
         average_discounted_returns=average_discounted_returns,
         critic_losses=critic_losses,
         block=block,
+    )
+
+
+def _print_evaluation_status(
+    status_label: str,
+    episode: EpisodeResult,
+    training_iteration: int | None,
+) -> None:
+    training_iteration_text = ""
+    if training_iteration is not None:
+        training_iteration_text = f" training_iteration={training_iteration}"
+    print(
+        f"{status_label}"
+        f"{training_iteration_text} "
+        f"total_reward={_episode_total_reward(episode):.6g} "
+        f"total_uncertainty={_episode_total_uncertainty(episode):.6g}"
     )
 
 
