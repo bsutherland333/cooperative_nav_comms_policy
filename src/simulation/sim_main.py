@@ -29,8 +29,8 @@ from simulation.line_sim.sim import LineSimulation
 
 
 PLOT_N_SIGMA = 2.0
-DEFAULT_COMMUNICATION_COST = 0.03
-COMMUNICATION_INTERVAL_STEPS = 50
+DEFAULT_COMMUNICATION_COST = 0.05
+COMMUNICATION_INTERVAL_STEPS = 30
 
 
 @dataclass(frozen=True)
@@ -122,7 +122,7 @@ def parse_args(argv: Sequence[str] | None) -> StandaloneSimConfig:
         choices=tuple(method.value for method in StateEncodingMethod),
     )
     parser.add_argument("--num-agents", default=2, type=_positive_int)
-    parser.add_argument("--num-steps", default=300, type=_positive_int)
+    parser.add_argument("--num-steps", default=120, type=_positive_int)
     parser.add_argument(
         "--comm-cost",
         default=DEFAULT_COMMUNICATION_COST,

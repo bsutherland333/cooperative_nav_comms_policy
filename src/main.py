@@ -66,7 +66,7 @@ def parse_args(argv: Sequence[str] | None) -> RunConfig:
         choices=tuple(method.value for method in StateEncodingMethod),
     )
     parser.add_argument("--function", default="poly")
-    parser.add_argument("--poly-degree", default=2, type=_nonnegative_int)
+    parser.add_argument("--poly-degree", default=3, type=_nonnegative_int)
     parser.add_argument("--num-agents", default=2, type=_positive_int)
     parser.add_argument("--num-iters", default=2500, type=_positive_int)
     parser.add_argument("--num-steps", default=120, type=_positive_int)
@@ -75,7 +75,7 @@ def parse_args(argv: Sequence[str] | None) -> RunConfig:
     parser.add_argument("--discount", default=0.9, type=_unit_interval_float)
     parser.add_argument("--entropy", default=0.0, type=_nonnegative_float)
     parser.add_argument("--comm-cost", default=0.05, type=_nonnegative_float)
-    parser.add_argument("--replay-buffer-size", default=6000, type=_nonnegative_int)
+    parser.add_argument("--replay-buffer-size", default=0, type=_nonnegative_int)
     parser.add_argument("--replay-batch-size", default=60, type=_positive_int)
     parser.add_argument("--replay-warmup-size", default=60, type=_nonnegative_int)
     parser.add_argument("--eval-plot-interval", type=_positive_int)
