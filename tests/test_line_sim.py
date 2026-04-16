@@ -43,6 +43,7 @@ def test_line_sim_uses_noisy_truth_and_nominal_priors() -> None:
     episode = sim.run(exploration=False)
 
     nominal_positions = np.arange(3, dtype=float) * sim.initial_position_scalar
+    prior_stds = sim.prior_std * (np.arange(3, dtype=float) + 1.0)
     assert episode.steps[0].timestep == 0
     assert isinstance(
         episode.steps[0].local_beliefs[0].estimate,
@@ -54,6 +55,7 @@ def test_line_sim_uses_noisy_truth_and_nominal_priors() -> None:
     )
     assert isinstance(episode.metadata["prior_local_belief"][0], LocalBelief)
     assert episode.metadata["initial_position_scalar"] == sim.initial_position_scalar
+    np.testing.assert_allclose(episode.metadata["prior_stds"], prior_stds)
     assert "actor_probabilities" not in episode.steps[0].extra
     assert "actor_logits" not in episode.steps[0].extra
     assert "true_positions" not in episode.steps[0].extra
@@ -69,7 +71,7 @@ def test_line_sim_uses_noisy_truth_and_nominal_priors() -> None:
     )
     np.testing.assert_allclose(
         np.asarray(episode.metadata["prior_local_belief"][0].covariance),
-        np.eye(3) * sim.prior_std**2,
+        np.diag(prior_stds**2),
         atol=1e-6,
     )
     np.testing.assert_allclose(

@@ -8,7 +8,7 @@ from simulation.line_sim.fg import FG
 def _fg() -> FG:
     return FG(
         num_agents=2,
-        prior_std=0.5,
+        prior_stds=(0.5, 0.75),
         propagation_std=0.2,
         range_std=0.1,
         initial_positions=(0.0, 1.0),
@@ -19,7 +19,7 @@ def test_fg_initializes_fleet_priors() -> None:
     fg = _fg()
 
     np.testing.assert_allclose(fg.estimate(0), np.array([0.0, 1.0]))
-    assert fg.covariance(0).shape == (2, 2)
+    np.testing.assert_allclose(fg.covariance(0), np.diag([0.5**2, 0.75**2]))
     assert fg.factor_count == 2
 
 

@@ -46,7 +46,7 @@ class FG:
     def __init__(
         self,
         num_agents: int,
-        prior_std: float,
+        prior_stds: Sequence[float],
         propagation_std: float,
         range_std: float,
         initial_positions: Sequence[float],
@@ -56,12 +56,15 @@ class FG:
             raise ValueError("At least two agents are required.")
         if len(initial_positions) != num_agents:
             raise ValueError("initial_positions must contain one value per agent.")
-        _validate_std(prior_std, "prior_std")
+        if len(prior_stds) != num_agents:
+            raise ValueError("prior_stds must contain one value per agent.")
+        for prior_std in prior_stds:
+            _validate_std(prior_std, "prior_stds")
         _validate_std(propagation_std, "propagation_std")
         _validate_std(range_std, "range_std")
 
         self.num_agents = num_agents
-        self.prior_std = prior_std
+        self.prior_stds = tuple(float(prior_std) for prior_std in prior_stds)
         self.propagation_std = propagation_std
         self.range_std = range_std
         self.graph = gtsam.NonlinearFactorGraph()
@@ -79,7 +82,7 @@ class FG:
             factor = gtsam.PriorFactorDouble(
                 key,
                 float(initial_position),
-                gtsam.noiseModel.Isotropic.Sigma(1, prior_std),
+                gtsam.noiseModel.Isotropic.Sigma(1, self.prior_stds[agent_id]),
             )
             self._add_factor(("prior", 0, agent_id), factor)
 

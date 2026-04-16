@@ -47,15 +47,16 @@ class LineSimulation(Simulation):
         nominal_positions = (
             np.arange(self.num_agents, dtype=float) * self.initial_position_scalar
         )
+        prior_stds = self.prior_std * (np.arange(self.num_agents, dtype=float) + 1.0)
         true_positions = nominal_positions + self._rng.normal(
             0.0,
-            self.prior_std,
+            prior_stds,
             size=self.num_agents,
         )
         estimators = tuple(
             FG(
                 num_agents=self.num_agents,
-                prior_std=self.prior_std,
+                prior_stds=prior_stds,
                 propagation_std=self.propagation_std,
                 range_std=self.range_std,
                 initial_positions=nominal_positions,
@@ -134,6 +135,7 @@ class LineSimulation(Simulation):
                 "num_agents": self.num_agents,
                 "num_steps": self.num_steps,
                 "prior_std": self.prior_std,
+                "prior_stds": prior_stds,
                 "propagation_std": self.propagation_std,
                 "range_std": self.range_std,
                 "initial_position_scalar": self.initial_position_scalar,
