@@ -29,8 +29,8 @@ from simulation.line_sim.sim import LineSimulation
 
 
 PLOT_N_SIGMA = 2.0
-DEFAULT_COMMUNICATION_COST = 0.05
-COMMUNICATION_INTERVAL_STEPS = 30
+DEFAULT_COMMUNICATION_COST = 0.1
+COMMUNICATION_INTERVAL_STEPS = 20
 
 
 @dataclass(frozen=True)
