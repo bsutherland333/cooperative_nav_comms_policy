@@ -14,19 +14,23 @@ if __package__ in {None, ""}:
         sys.path.insert(0, str(src_root))
 
 import jax.numpy as jnp
+import numpy as np
 
+from policy.actions import partner_to_selection
 from policy.actor import Actor
+from policy.actor import ActorDecision
 from policy.function_provider import FunctionProvider
 from simulation.base import Plotter, Simulation
+from simulation.data_structures import EpisodeResult
 from simulation.rewards import Reward, RewardMethod
 from simulation.state_encoding import ActorEncoder, StateEncodingMethod
 from simulation.line_sim.plotter import LinePlotter
 from simulation.line_sim.sim import LineSimulation
 
 
-FAKE_POLICY_NO_COMMUNICATION_BIAS = 4.0
 PLOT_N_SIGMA = 2.0
 DEFAULT_COMMUNICATION_COST = 0.03
+COMMUNICATION_INTERVAL_STEPS = 50
 
 
 @dataclass(frozen=True)
@@ -56,6 +60,53 @@ class FixedLogitProvider(FunctionProvider):
         del gradient, learning_rate
 
 
+class ScheduledCommunicationActor(Actor):
+    """Fixed policy that communicates on a regular timestep interval."""
+
+    def __init__(
+        self,
+        state_size: int,
+        action_size: int,
+        function_provider: FunctionProvider,
+        actor_encoder: ActorEncoder,
+        communication_interval_steps: int,
+    ) -> None:
+        super().__init__(
+            state_size=state_size,
+            action_size=action_size,
+            function_provider=function_provider,
+            actor_encoder=actor_encoder,
+        )
+        self.communication_interval_steps = communication_interval_steps
+        self._query_count = 0
+
+    def get_action(
+        self,
+        local_belief: Any,
+        agent_id: int,
+        exploration: bool,
+    ) -> ActorDecision:
+        del local_belief, exploration
+        timestep = self._query_count // self.action_size
+        self._query_count += 1
+
+        selection = 0
+        if (timestep + 1) % self.communication_interval_steps == 0:
+            partner_id = (agent_id + 1) % self.action_size
+            selection = partner_to_selection(
+                partner_id=partner_id,
+                agent_id=agent_id,
+                num_agents=self.action_size,
+            )
+
+        probabilities = jnp.zeros(self.action_size)
+        probabilities = probabilities.at[selection].set(1.0)
+        return ActorDecision(
+            selection=selection,
+            probabilities=probabilities,
+        )
+
+
 def parse_args(argv: Sequence[str] | None) -> StandaloneSimConfig:
     """Parse CLI arguments for a standalone simulator run."""
     parser = ArgumentParser(description="Run a simulator without training.")
@@ -71,7 +122,7 @@ def parse_args(argv: Sequence[str] | None) -> StandaloneSimConfig:
         choices=tuple(method.value for method in StateEncodingMethod),
     )
     parser.add_argument("--num-agents", default=2, type=_positive_int)
-    parser.add_argument("--num-steps", default=120, type=_positive_int)
+    parser.add_argument("--num-steps", default=300, type=_positive_int)
     parser.add_argument(
         "--comm-cost",
         default=DEFAULT_COMMUNICATION_COST,
@@ -107,6 +158,11 @@ def run_standalone_sim(config: StandaloneSimConfig) -> None:
     episode = simulation.run(exploration=True)
     plotter = build_plotter(config)
 
+    print(
+        "final_evaluation "
+        f"total_reward={_episode_total_reward(episode):.6g} "
+        f"total_uncertainty={_episode_total_uncertainty(episode):.6g}"
+    )
     plotter.plot(
         episode=episode,
         n_sigma=PLOT_N_SIGMA,
@@ -122,10 +178,21 @@ def run_standalone_sim(config: StandaloneSimConfig) -> None:
     )
 
 
+def _episode_total_reward(episode: EpisodeResult) -> float:
+    return sum(float(step.reward) for step in episode.steps)
+
+
+def _episode_total_uncertainty(episode: EpisodeResult) -> float:
+    return sum(
+        float(np.trace(local_belief.covariance))
+        for step in episode.steps
+        for local_belief in step.next_local_beliefs
+    )
+
+
 def build_fake_actor(config: StandaloneSimConfig) -> Actor:
-    """Build a fixed-logit random policy biased toward no communication."""
+    """Build a deterministic policy that communicates every fixed interval."""
     logits = jnp.zeros(config.num_agents)
-    logits = logits.at[0].set(FAKE_POLICY_NO_COMMUNICATION_BIAS)
     actor_encoder = ActorEncoder(
         num_agents=config.num_agents,
         vehicle_state_size=LineSimulation.vehicle_state_size,
@@ -135,11 +202,12 @@ def build_fake_actor(config: StandaloneSimConfig) -> Actor:
         input_size=actor_encoder.state_size,
         logits=logits,
     )
-    return Actor(
+    return ScheduledCommunicationActor(
         state_size=actor_encoder.state_size,
         action_size=config.num_agents,
         function_provider=provider,
         actor_encoder=actor_encoder,
+        communication_interval_steps=COMMUNICATION_INTERVAL_STEPS,
     )
 
 

@@ -3,13 +3,14 @@
 from typing import Any
 
 import jax.numpy as jnp
+import numpy as np
 import pytest
 
 import main
 from policy.function_provider import PolynomialFunctionProvider
 from simulation.line_sim.plotter import LinePlotter
 from simulation.line_sim.sim import LineSimulation
-from simulation.data_structures import EpisodeResult, SimulationStep
+from simulation.data_structures import EpisodeResult, LocalBelief, SimulationStep
 from simulation.rewards import Reward, RewardMethod
 from simulation.state_encoding import (
     ActorEncoder,
@@ -178,6 +179,7 @@ def test_run_training_orchestrates_training_and_status_reporting(
         "critic_loss=1.25 eta=0s"
         in captured.out
     )
+    assert "final_evaluation total_reward=0 total_uncertainty=0" in captured.out
     assert show_calls == [True]
     status_axes = main.plt.gcf().axes
     assert [axis.get_ylabel() for axis in status_axes] == [
@@ -242,6 +244,7 @@ def test_run_training_plots_final_evaluation_after_keyboard_interrupt(
         "iteration=1 reward_sum=1 average_discounted_return=1 critic_loss=1.25"
         in captured.out
     )
+    assert "final_evaluation total_reward=0 total_uncertainty=0" in captured.out
     assert show_calls == [True]
 
     assert len(FakeSimulation.instances) == 1
@@ -316,6 +319,31 @@ def test_run_training_plots_intermediate_evaluations_without_blocking(
     ]
     assert show_calls == [{"block": False}, {}]
     assert pause_calls == [0.001, 0.001]
+
+
+def test_episode_total_uncertainty_sums_successor_covariance_traces() -> None:
+    episode = EpisodeResult.from_steps(
+        steps=(
+            _uncertain_step(
+                reward=1.5,
+                next_covariances=(
+                    np.diag([1.0, 2.0]),
+                    np.diag([3.0, 4.0]),
+                ),
+            ),
+            _uncertain_step(
+                reward=-0.25,
+                next_covariances=(
+                    np.diag([5.0, 6.0]),
+                    np.diag([7.0, 8.0]),
+                ),
+            ),
+        ),
+        metadata={},
+    )
+
+    assert main._episode_total_reward(episode) == pytest.approx(1.25)
+    assert main._episode_total_uncertainty(episode) == pytest.approx(36.0)
 
 
 def test_function_type_cli_arg_is_parsed() -> None:
@@ -617,6 +645,36 @@ def _fake_step(reward: float) -> SimulationStep:
         communication_events=(),
         reward=reward,
         true_positions=jnp.array([0.0]),
+        extra={},
+    )
+
+
+def _uncertain_step(
+    reward: float,
+    next_covariances: tuple[np.ndarray, ...],
+) -> SimulationStep:
+    local_beliefs = tuple(
+        LocalBelief(
+            estimate=np.zeros(covariance.shape[0]),
+            covariance=np.eye(covariance.shape[0]),
+        )
+        for covariance in next_covariances
+    )
+    next_local_beliefs = tuple(
+        LocalBelief(
+            estimate=np.zeros(covariance.shape[0]),
+            covariance=covariance,
+        )
+        for covariance in next_covariances
+    )
+    return SimulationStep(
+        timestep=0,
+        local_beliefs=local_beliefs,
+        next_local_beliefs=next_local_beliefs,
+        action_vector=tuple(0 for _ in local_beliefs),
+        communication_events=(),
+        reward=reward,
+        true_positions=np.zeros(len(local_beliefs)),
         extra={},
     )
 

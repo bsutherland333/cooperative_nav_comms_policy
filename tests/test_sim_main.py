@@ -76,6 +76,25 @@ def test_sim_main_builds_line_simulation() -> None:
     assert simulation.reward_function.communication_cost == 0.3
 
 
+def test_fake_actor_communicates_every_50_steps() -> None:
+    config = sim_main.StandaloneSimConfig(
+        simulator_name="line",
+        reward_method=RewardMethod.TRACE,
+        state_encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
+        num_agents=2,
+        num_steps=50,
+        communication_cost=0.3,
+    )
+    actor = sim_main.build_fake_actor(config)
+
+    for _ in range(49):
+        assert actor.get_action(None, agent_id=0, exploration=True).selection == 0
+        assert actor.get_action(None, agent_id=1, exploration=True).selection == 0
+
+    assert actor.get_action(None, agent_id=0, exploration=True).selection == 1
+    assert actor.get_action(None, agent_id=1, exploration=True).selection == 1
+
+
 def test_sim_main_fails_cleanly_for_unknown_simulator(capsys: object) -> None:
     exit_code = sim_main.main(["--simulator", "missing"])
 
@@ -135,6 +154,8 @@ def test_run_standalone_sim_shows_plot_without_saving(
     sim_main.run_standalone_sim(config)
 
     captured = capsys.readouterr()
+    assert "final_evaluation total_reward=" in captured.out
+    assert " total_uncertainty=" in captured.out
     assert "Ran line simulation with 2 agents for 1 steps" in captured.out
     assert not (tmp_path / "line_simulation.png").exists()
     assert show_calls == [True]

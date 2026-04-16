@@ -7,6 +7,7 @@ import sys
 import time
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 from policy.actor import Actor
 from policy.critic import Critic
@@ -187,6 +188,11 @@ def run_training(config: RunConfig) -> None:
 
     final_simulation = simulation_type(actor)
     final_episode = final_simulation.run(exploration=False)
+    print(
+        "final_evaluation "
+        f"total_reward={_episode_total_reward(final_episode):.6g} "
+        f"total_uncertainty={_episode_total_uncertainty(final_episode):.6g}"
+    )
     _plot_evaluation_and_training_status(
         config=config,
         episode=final_episode,
@@ -232,6 +238,18 @@ def _plot_evaluation_and_training_status(
         average_discounted_returns=average_discounted_returns,
         critic_losses=critic_losses,
         block=block,
+    )
+
+
+def _episode_total_reward(episode: EpisodeResult) -> float:
+    return sum(float(step.reward) for step in episode.steps)
+
+
+def _episode_total_uncertainty(episode: EpisodeResult) -> float:
+    return sum(
+        float(np.trace(local_belief.covariance))
+        for step in episode.steps
+        for local_belief in step.next_local_beliefs
     )
 
 
