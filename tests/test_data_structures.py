@@ -41,13 +41,23 @@ def test_simulation_step_requires_successor_belief_per_agent() -> None:
 def test_local_belief_copies_estimate_and_covariance() -> None:
     estimate = np.array([0.0, 1.0])
     covariance = np.eye(2)
+    time_since_last_communication = np.array([0.0, 3.0])
 
-    belief = LocalBelief(estimate=estimate, covariance=covariance)
+    belief = LocalBelief(
+        estimate=estimate,
+        covariance=covariance,
+        time_since_last_communication=time_since_last_communication,
+    )
     estimate[0] = 10.0
     covariance[0, 0] = 10.0
+    time_since_last_communication[1] = 10.0
 
     np.testing.assert_allclose(np.asarray(belief.estimate), np.array([0.0, 1.0]))
     np.testing.assert_allclose(np.asarray(belief.covariance), np.eye(2))
+    np.testing.assert_allclose(
+        np.asarray(belief.time_since_last_communication),
+        np.array([0.0, 3.0]),
+    )
 
 
 def test_episode_result_from_steps_stores_simulation_outputs() -> None:

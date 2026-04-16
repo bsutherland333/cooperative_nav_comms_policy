@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from policy.actor import Actor
-from simulation.data_structures import LocalBelief
+from simulation.data_structures import EpisodeResult, LocalBelief
 from simulation.line_sim.sim import LineSimulation
 from simulation.rewards import Reward, RewardMethod
 from simulation.state_encoding import ActorEncoder, StateEncodingMethod
@@ -27,6 +27,26 @@ def _actor(logits: np.ndarray) -> Actor:
         function_provider=provider,
         actor_encoder=actor_encoder,
     )
+
+
+def _communication_ages(
+    episode: EpisodeResult,
+    step_index: int,
+    agent_id: int,
+) -> np.ndarray:
+    return episode.steps[step_index].local_beliefs[
+        agent_id
+    ].time_since_last_communication
+
+
+def _next_communication_ages(
+    episode: EpisodeResult,
+    step_index: int,
+    agent_id: int,
+) -> np.ndarray:
+    return episode.steps[step_index].next_local_beliefs[
+        agent_id
+    ].time_since_last_communication
 
 
 def test_line_sim_uses_noisy_truth_and_nominal_priors() -> None:
@@ -101,6 +121,55 @@ def test_line_sim_merges_duplicate_communication_requests() -> None:
     assert episode.steps[0].reward > -2_500.0
 
 
+def test_line_sim_records_time_since_last_communication() -> None:
+    no_communication_sim = LineSimulation(
+        actor=_actor(np.array([10.0, 0.0])),
+        num_agents=2,
+        num_steps=2,
+        reward_function=Reward(
+            reward_method=RewardMethod.TRACE,
+            communication_cost=0.0,
+        ),
+    )
+
+    no_communication_episode = no_communication_sim.run(exploration=False)
+
+    np.testing.assert_allclose(
+        _communication_ages(no_communication_episode, step_index=0, agent_id=0),
+        np.array([0.0, 0.0]),
+    )
+    np.testing.assert_allclose(
+        _communication_ages(no_communication_episode, step_index=1, agent_id=0),
+        np.array([0.0, 1.0]),
+    )
+    np.testing.assert_allclose(
+        _next_communication_ages(no_communication_episode, step_index=1, agent_id=0),
+        np.array([0.0, 2.0]),
+    )
+
+    communication_sim = LineSimulation(
+        actor=_actor(np.array([0.0, 10.0])),
+        num_agents=2,
+        num_steps=1,
+        reward_function=Reward(
+            reward_method=RewardMethod.TRACE,
+            communication_cost=0.0,
+        ),
+    )
+
+    communication_episode = communication_sim.run(exploration=False)
+
+    assert communication_episode.steps[0].communication_events == ((0, 1),)
+    np.testing.assert_allclose(
+        _next_communication_ages(communication_episode, step_index=0, agent_id=0),
+        np.array([0.0, 0.0]),
+    )
+    np.testing.assert_allclose(
+        _next_communication_ages(communication_episode, step_index=0, agent_id=1),
+        np.array([0.0, 0.0]),
+    )
+
+
 def test_line_sim_records_the_decision_time_beliefs_used_by_actor() -> None:
     actor_encoder = ActorEncoder(
         num_agents=2,
@@ -145,12 +214,28 @@ def test_line_reward_function_rewards_trace_reduction_and_unique_events() -> Non
         communication_cost=2.0,
     )
     current_local_beliefs = (
-        LocalBelief(estimate=np.array([0.0, 1.0]), covariance=np.eye(2) * 3.0),
-        LocalBelief(estimate=np.array([1.0, 2.0]), covariance=np.eye(2) * 2.0),
+        LocalBelief(
+            estimate=np.array([0.0, 1.0]),
+            covariance=np.eye(2) * 3.0,
+            time_since_last_communication=np.array([0.0, 1.0]),
+        ),
+        LocalBelief(
+            estimate=np.array([1.0, 2.0]),
+            covariance=np.eye(2) * 2.0,
+            time_since_last_communication=np.array([1.0, 0.0]),
+        ),
     )
     next_local_beliefs = (
-        LocalBelief(estimate=np.array([0.0, 1.0]), covariance=np.eye(2)),
-        LocalBelief(estimate=np.array([1.0, 2.0]), covariance=np.eye(2)),
+        LocalBelief(
+            estimate=np.array([0.0, 1.0]),
+            covariance=np.eye(2),
+            time_since_last_communication=np.array([0.0, 0.0]),
+        ),
+        LocalBelief(
+            estimate=np.array([1.0, 2.0]),
+            covariance=np.eye(2),
+            time_since_last_communication=np.array([0.0, 0.0]),
+        ),
     )
 
     reward = reward_function(
@@ -170,6 +255,7 @@ def test_line_reward_function_requires_matching_belief_counts() -> None:
     local_belief = LocalBelief(
         estimate=np.array([0.0, 1.0]),
         covariance=np.eye(2),
+        time_since_last_communication=np.array([0.0, 1.0]),
     )
 
     with pytest.raises(ValueError, match="matching current and next"):

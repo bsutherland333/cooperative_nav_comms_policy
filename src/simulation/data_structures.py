@@ -9,23 +9,40 @@ import numpy as np
 
 @dataclass(frozen=True)
 class LocalBelief:
-    """Local estimator belief at one simulator timestep."""
+    """Local estimator belief and communication ages at one simulator timestep."""
 
     estimate: np.ndarray
     covariance: np.ndarray
+    time_since_last_communication: np.ndarray
 
     def __post_init__(self) -> None:
         """Validate and copy the stored local fleet belief snapshot."""
         estimate = np.array(self.estimate, dtype=float, copy=True)
         covariance = np.array(self.covariance, dtype=float, copy=True)
+        time_since_last_communication = np.array(
+            self.time_since_last_communication,
+            dtype=float,
+            copy=True,
+        )
         if estimate.ndim != 1:
             raise ValueError("Local belief estimate must be a vector.")
         if covariance.ndim != 2:
             raise ValueError("Local belief covariance must be a matrix.")
         if covariance.shape != (estimate.shape[0], estimate.shape[0]):
             raise ValueError("Local belief covariance must match estimate size.")
+        if time_since_last_communication.ndim != 1:
+            raise ValueError("Communication ages must be a vector.")
+        if not np.all(np.isfinite(time_since_last_communication)):
+            raise ValueError("Communication ages must be finite.")
+        if np.any(time_since_last_communication < 0.0):
+            raise ValueError("Communication ages must be nonnegative.")
         object.__setattr__(self, "estimate", estimate)
         object.__setattr__(self, "covariance", covariance)
+        object.__setattr__(
+            self,
+            "time_since_last_communication",
+            time_since_last_communication,
+        )
 
 
 @dataclass(frozen=True)

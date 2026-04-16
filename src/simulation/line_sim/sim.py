@@ -63,7 +63,15 @@ class LineSimulation(Simulation):
             )
             for _ in range(self.num_agents)
         )
-        local_beliefs = _local_beliefs(estimators, 0)
+        last_communication_timesteps = np.zeros(
+            (self.num_agents, self.num_agents),
+            dtype=int,
+        )
+        local_beliefs = _local_beliefs(
+            estimators,
+            0,
+            last_communication_timesteps,
+        )
         prior_local_belief = local_beliefs
 
         steps: list[SimulationStep] = []
@@ -101,15 +109,23 @@ class LineSimulation(Simulation):
                 range_measurement_count += 1
 
             next_timestep = timestep + 1
+            _record_communication_timesteps(
+                last_communication_timesteps=last_communication_timesteps,
+                communication_events=communication_events,
+                next_timestep=next_timestep,
+            )
             true_positions_at_decision = true_positions.copy()
             true_positions = self._propagate_truth(true_positions)
             for estimator in estimators:
                 # Currently propagates all states, may want to change this to only propagating local state.
-                # Will need to encode age of last communication somehow, though.
                 estimator.add_propagation_step(next_timestep)
                 estimator.optimize()
 
-            next_local_beliefs = _local_beliefs(estimators, next_timestep)
+            next_local_beliefs = _local_beliefs(
+                estimators,
+                next_timestep,
+                last_communication_timesteps,
+            )
             steps.append(
                 SimulationStep(
                     timestep=timestep,
@@ -191,12 +207,44 @@ class LineSimulation(Simulation):
 def _local_beliefs(
     estimators: tuple[FG, ...],
     timestep: int,
+    last_communication_timesteps: np.ndarray,
 ) -> tuple[LocalBelief, ...]:
-    return tuple(_local_belief(estimator, timestep) for estimator in estimators)
+    return tuple(
+        _local_belief(
+            estimator=estimator,
+            timestep=timestep,
+            agent_id=agent_id,
+            last_communication_timesteps=last_communication_timesteps[agent_id],
+        )
+        for agent_id, estimator in enumerate(estimators)
+    )
 
 
-def _local_belief(estimator: FG, timestep: int) -> LocalBelief:
+def _local_belief(
+    estimator: FG,
+    timestep: int,
+    agent_id: int,
+    last_communication_timesteps: np.ndarray,
+) -> LocalBelief:
+    time_since_last_communication = timestep - last_communication_timesteps
+    time_since_last_communication = np.array(
+        time_since_last_communication,
+        dtype=float,
+        copy=True,
+    )
+    time_since_last_communication[agent_id] = 0.0
     return LocalBelief(
         estimate=estimator.estimate(timestep),
         covariance=estimator.covariance(timestep),
+        time_since_last_communication=time_since_last_communication,
     )
+
+
+def _record_communication_timesteps(
+    last_communication_timesteps: np.ndarray,
+    communication_events: tuple[tuple[int, int], ...],
+    next_timestep: int,
+) -> None:
+    for agent_id, partner_id in communication_events:
+        last_communication_timesteps[agent_id, partner_id] = next_timestep
+        last_communication_timesteps[partner_id, agent_id] = next_timestep

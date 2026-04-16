@@ -15,7 +15,7 @@ class StateEncodingMethod(StrEnum):
 
 
 class ActorEncoder:
-    """Encode a fleet belief with the querying vehicle ordered first."""
+    """Encode a fleet belief and communication ages with local vehicle first."""
 
     def __init__(
         self,
@@ -39,11 +39,22 @@ class ActorEncoder:
         self._validate_agent_id(agent_id)
         mean = jnp.asarray(local_belief.estimate)
         covariance = jnp.asarray(local_belief.covariance)
-        self._validate_belief_shapes(mean=mean, covariance=covariance)
+        time_since_last_communication = jnp.asarray(
+            local_belief.time_since_last_communication
+        )
+        self._validate_belief_shapes(
+            mean=mean,
+            covariance=covariance,
+            time_since_last_communication=time_since_last_communication,
+        )
 
-        order = self._local_first_state_order(agent_id)
-        ordered_mean = mean[order]
-        ordered_covariance = covariance[jnp.ix_(order, order)]
+        agent_order = self._local_first_agent_order(agent_id)
+        state_order = self._local_first_state_order(agent_order)
+        ordered_mean = mean[state_order]
+        ordered_covariance = covariance[jnp.ix_(state_order, state_order)]
+        ordered_time_since_last_communication = time_since_last_communication[
+            jnp.asarray(agent_order)
+        ]
         if self.encoding_method == StateEncodingMethod.MEAN_DIAGONAL:
             covariance_features = jnp.diag(ordered_covariance)
         elif self.encoding_method == StateEncodingMethod.MEAN_FULL_COVARIANCE:
@@ -54,22 +65,34 @@ class ActorEncoder:
             )
         else:
             raise ValueError(f"Unknown state encoding method: {self.encoding_method}")
-        return jnp.concatenate((ordered_mean, covariance_features))
+        return jnp.concatenate(
+            (
+                ordered_mean,
+                covariance_features,
+                ordered_time_since_last_communication,
+            )
+        )
 
     def _state_size(self) -> int:
         if self.encoding_method == StateEncodingMethod.MEAN_DIAGONAL:
-            return self.estimate_size * 2
-        return self.estimate_size + self.estimate_size * (self.estimate_size + 1) // 2
+            fleet_belief_size = self.estimate_size * 2
+        else:
+            fleet_belief_size = (
+                self.estimate_size + self.estimate_size * (self.estimate_size + 1) // 2
+            )
+        return fleet_belief_size + self.num_agents
 
-    def _local_first_state_order(self, agent_id: int) -> jnp.ndarray:
-        vehicle_order = [agent_id] + [
+    def _local_first_agent_order(self, agent_id: int) -> list[int]:
+        return [agent_id] + [
             other_agent_id
             for other_agent_id in range(self.num_agents)
             if other_agent_id != agent_id
         ]
+
+    def _local_first_state_order(self, agent_order: Sequence[int]) -> jnp.ndarray:
         state_indices = [
             agent_state_index
-            for ordered_agent_id in vehicle_order
+            for ordered_agent_id in agent_order
             for agent_state_index in range(
                 ordered_agent_id * self.vehicle_state_size,
                 (ordered_agent_id + 1) * self.vehicle_state_size,
@@ -103,11 +126,14 @@ class ActorEncoder:
         self,
         mean: jnp.ndarray,
         covariance: jnp.ndarray,
+        time_since_last_communication: jnp.ndarray,
     ) -> None:
         if mean.shape != (self.estimate_size,):
             raise ValueError("Local belief estimate must match fleet state size.")
         if covariance.shape != (self.estimate_size, self.estimate_size):
             raise ValueError("Local belief covariance must match fleet state size.")
+        if time_since_last_communication.shape != (self.num_agents,):
+            raise ValueError("Communication ages must match fleet size.")
 
 
 class CriticEncoder:

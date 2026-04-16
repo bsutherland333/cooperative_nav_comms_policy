@@ -665,6 +665,7 @@ def _uncertain_step(
         LocalBelief(
             estimate=np.zeros(covariance.shape[0]),
             covariance=np.eye(covariance.shape[0]),
+            time_since_last_communication=np.zeros(covariance.shape[0]),
         )
         for covariance in next_covariances
     )
@@ -672,6 +673,7 @@ def _uncertain_step(
         LocalBelief(
             estimate=np.zeros(covariance.shape[0]),
             covariance=covariance,
+            time_since_last_communication=np.zeros(covariance.shape[0]),
         )
         for covariance in next_covariances
     )

@@ -23,12 +23,28 @@ def _episode_with_events(
     step = SimulationStep(
         timestep=0,
         local_beliefs=(
-            LocalBelief(estimate=np.array([0.0, 1.0]), covariance=prior_covariance),
-            LocalBelief(estimate=np.array([0.1, 1.1]), covariance=prior_covariance),
+            LocalBelief(
+                estimate=np.array([0.0, 1.0]),
+                covariance=prior_covariance,
+                time_since_last_communication=np.array([0.0, 1.0]),
+            ),
+            LocalBelief(
+                estimate=np.array([0.1, 1.1]),
+                covariance=prior_covariance,
+                time_since_last_communication=np.array([1.0, 0.0]),
+            ),
         ),
         next_local_beliefs=(
-            LocalBelief(estimate=np.array([0.0, 1.0]), covariance=prior_covariance),
-            LocalBelief(estimate=np.array([0.1, 1.1]), covariance=prior_covariance),
+            LocalBelief(
+                estimate=np.array([0.0, 1.0]),
+                covariance=prior_covariance,
+                time_since_last_communication=np.array([0.0, 2.0]),
+            ),
+            LocalBelief(
+                estimate=np.array([0.1, 1.1]),
+                covariance=prior_covariance,
+                time_since_last_communication=np.array([2.0, 0.0]),
+            ),
         ),
         action_vector=(0, 0),
         communication_events=communication_events,
@@ -43,10 +59,12 @@ def _episode_with_events(
                 LocalBelief(
                     estimate=np.array([0.0, 1.0]),
                     covariance=prior_covariance,
+                    time_since_last_communication=np.array([0.0, 0.0]),
                 ),
                 LocalBelief(
                     estimate=np.array([0.0, 1.0]),
                     covariance=prior_covariance,
+                    time_since_last_communication=np.array([0.0, 0.0]),
                 ),
             ),
         },
