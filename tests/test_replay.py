@@ -69,8 +69,8 @@ def test_replay_buffer_samples_stacked_uniform_batch() -> None:
     batch = buffer.sample(batch_size=5)
 
     assert batch.global_states.shape == (5, 1)
-    assert batch.local_actor_states.shape == (5, 2, 1)
-    assert batch.action_vectors.shape == (5, 2)
+    assert batch.local_actor_states.shape == (5, 2, 2, 1)
+    assert batch.action_matrices.shape == (5, 2, 2)
     assert batch.rewards.shape == (5,)
     assert batch.next_global_states.shape == (5, 1)
     assert batch.terminals.shape == (5,)
@@ -79,8 +79,13 @@ def test_replay_buffer_samples_stacked_uniform_batch() -> None:
 def _transition(index: int) -> ReplayTransition:
     return ReplayTransition(
         global_state=jnp.array([float(index)]),
-        local_actor_states=jnp.array([[float(index)], [float(index + 1)]]),
-        action_vector=jnp.array([0, 1], dtype=jnp.int32),
+        local_actor_states=jnp.array(
+            [
+                [[0.0], [float(index)]],
+                [[float(index + 1)], [0.0]],
+            ]
+        ),
+        action_matrix=jnp.array([[0, 1], [0, 0]], dtype=jnp.int32),
         reward=float(index),
         next_global_state=jnp.array([float(index + 1)]),
         terminal=False,

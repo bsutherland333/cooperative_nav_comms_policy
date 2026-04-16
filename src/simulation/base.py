@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from simulation.data_structures import EpisodeResult
 from simulation.rewards import Reward
+from policy.actions import BINARY_ACTION_SIZE
 
 if TYPE_CHECKING:
     from policy.actor import Actor
@@ -33,8 +34,8 @@ class Simulation(ABC):
             raise ValueError("At least two agents are required.")
         if num_steps <= 0:
             raise ValueError("num_steps must be positive.")
-        if actor.action_size != num_agents:
-            raise ValueError("Actor action_size must match num_agents.")
+        if actor.action_size != BINARY_ACTION_SIZE:
+            raise ValueError("Actor action_size must be binary.")
 
         self.actor = actor
         self.num_agents = num_agents

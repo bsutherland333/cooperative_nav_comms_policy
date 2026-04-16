@@ -16,7 +16,7 @@ if __package__ in {None, ""}:
 import jax.numpy as jnp
 import numpy as np
 
-from policy.actions import partner_to_selection
+from policy.actions import BINARY_ACTION_SIZE, COMMUNICATE, NO_COMMUNICATION
 from policy.actor import Actor
 from policy.actor import ActorDecision
 from policy.function_provider import FunctionProvider
@@ -69,6 +69,7 @@ class ScheduledCommunicationActor(Actor):
         action_size: int,
         function_provider: FunctionProvider,
         actor_encoder: ActorEncoder,
+        num_agents: int,
         communication_interval_steps: int,
     ) -> None:
         super().__init__(
@@ -77,6 +78,7 @@ class ScheduledCommunicationActor(Actor):
             function_provider=function_provider,
             actor_encoder=actor_encoder,
         )
+        self.num_agents = num_agents
         self.communication_interval_steps = communication_interval_steps
         self._query_count = 0
 
@@ -84,20 +86,19 @@ class ScheduledCommunicationActor(Actor):
         self,
         local_belief: Any,
         agent_id: int,
+        partner_id: int,
         exploration: bool,
     ) -> ActorDecision:
         del local_belief, exploration
-        timestep = self._query_count // self.action_size
+        decisions_per_timestep = self.num_agents * (self.num_agents - 1)
+        timestep = self._query_count // decisions_per_timestep
         self._query_count += 1
 
-        selection = 0
+        selection = NO_COMMUNICATION
         if (timestep + 1) % self.communication_interval_steps == 0:
-            partner_id = (agent_id + 1) % self.action_size
-            selection = partner_to_selection(
-                partner_id=partner_id,
-                agent_id=agent_id,
-                num_agents=self.action_size,
-            )
+            target_partner_id = (agent_id + 1) % self.num_agents
+            if partner_id == target_partner_id:
+                selection = COMMUNICATE
 
         probabilities = jnp.zeros(self.action_size)
         probabilities = probabilities.at[selection].set(1.0)
@@ -192,7 +193,7 @@ def _episode_total_uncertainty(episode: EpisodeResult) -> float:
 
 def build_fake_actor(config: StandaloneSimConfig) -> Actor:
     """Build a deterministic policy that communicates every fixed interval."""
-    logits = jnp.zeros(config.num_agents)
+    logits = jnp.zeros(BINARY_ACTION_SIZE)
     actor_encoder = ActorEncoder(
         num_agents=config.num_agents,
         vehicle_state_size=LineSimulation.vehicle_state_size,
@@ -204,9 +205,10 @@ def build_fake_actor(config: StandaloneSimConfig) -> Actor:
     )
     return ScheduledCommunicationActor(
         state_size=actor_encoder.state_size,
-        action_size=config.num_agents,
+        action_size=BINARY_ACTION_SIZE,
         function_provider=provider,
         actor_encoder=actor_encoder,
+        num_agents=config.num_agents,
         communication_interval_steps=COMMUNICATION_INTERVAL_STEPS,
     )
 

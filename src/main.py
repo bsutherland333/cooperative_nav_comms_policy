@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from policy.actor import Actor
+from policy.actions import BINARY_ACTION_SIZE
 from policy.critic import Critic
 from policy.function_provider import FunctionProvider, PolynomialFunctionProvider
 from simulation.base import Plotter
@@ -321,11 +322,11 @@ def build_actor(config: RunConfig) -> Actor:
     provider = build_function_provider(
         config=config,
         role="actor",
-        output_size=config.num_agents,
+        output_size=BINARY_ACTION_SIZE,
     )
     return Actor(
         state_size=provider.input_size,
-        action_size=config.num_agents,
+        action_size=BINARY_ACTION_SIZE,
         function_provider=provider,
         actor_encoder=actor_encoder,
     )

@@ -46,7 +46,7 @@ def _episode_with_events(
                 time_since_last_communication=np.array([2.0, 0.0]),
             ),
         ),
-        action_vector=(0, 0),
+        action_matrix=((0, 0), (0, 0)),
         communication_events=communication_events,
         reward=-1.0,
         true_positions=np.array([0.2, 0.9]),

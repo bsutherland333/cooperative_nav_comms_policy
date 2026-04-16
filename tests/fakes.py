@@ -28,8 +28,13 @@ class FixedOutputProvider(FunctionProvider):
 class IdentityActorEncoder:
     """Actor encoder that treats the local belief as an encoded vector."""
 
-    def encode_state(self, local_belief: Any, agent_id: int) -> jnp.ndarray:
-        del agent_id
+    def encode_state(
+        self,
+        local_belief: Any,
+        agent_id: int,
+        partner_id: int,
+    ) -> jnp.ndarray:
+        del agent_id, partner_id
         return jnp.asarray(local_belief)
 
 

@@ -34,7 +34,7 @@ class ReplayTransition:
 
     global_state: jnp.ndarray
     local_actor_states: jnp.ndarray
-    action_vector: jnp.ndarray
+    action_matrix: jnp.ndarray
     reward: float
     next_global_state: jnp.ndarray
     terminal: bool
@@ -46,7 +46,7 @@ class ReplayBatch:
 
     global_states: jnp.ndarray
     local_actor_states: jnp.ndarray
-    action_vectors: jnp.ndarray
+    action_matrices: jnp.ndarray
     rewards: jnp.ndarray
     next_global_states: jnp.ndarray
     terminals: jnp.ndarray
@@ -106,8 +106,8 @@ class ReplayBuffer:
             local_actor_states=jnp.stack(
                 tuple(transition.local_actor_states for transition in transitions)
             ),
-            action_vectors=jnp.stack(
-                tuple(transition.action_vector for transition in transitions)
+            action_matrices=jnp.stack(
+                tuple(transition.action_matrix for transition in transitions)
             ),
             rewards=jnp.asarray(
                 tuple(float(transition.reward) for transition in transitions)

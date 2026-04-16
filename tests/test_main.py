@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 import main
+from policy.actions import BINARY_ACTION_SIZE
 from policy.function_provider import PolynomialFunctionProvider
 from simulation.line_sim.plotter import LinePlotter
 from simulation.line_sim.sim import LineSimulation
@@ -423,15 +424,13 @@ def test_encoder_registration_uses_simulator_vehicle_state_size() -> None:
     actor_provider = main.build_function_provider(
         config=config,
         role="actor",
-        output_size=config.num_agents,
+        output_size=BINARY_ACTION_SIZE,
     )
 
     assert isinstance(actor.actor_encoder, ActorEncoder)
     assert isinstance(critic.critic_encoder, CriticEncoder)
     assert actor.actor_encoder.vehicle_state_size == LineSimulation.vehicle_state_size
-    assert critic.critic_encoder.actor_encoder.vehicle_state_size == (
-        LineSimulation.vehicle_state_size
-    )
+    assert critic.critic_encoder.vehicle_state_size == LineSimulation.vehicle_state_size
     assert actor_provider.input_size == actor.actor_encoder.state_size
 
 
@@ -599,7 +598,7 @@ def test_polynomial_function_provider_registration_uses_encoder_dimensions() -> 
     actor_provider = main.build_function_provider(
         config=config,
         role="actor",
-        output_size=config.num_agents,
+        output_size=BINARY_ACTION_SIZE,
     )
     critic_provider = main.build_function_provider(
         config=config,
@@ -609,7 +608,7 @@ def test_polynomial_function_provider_registration_uses_encoder_dimensions() -> 
 
     assert isinstance(actor_provider, PolynomialFunctionProvider)
     assert actor_provider.input_size == actor_encoder.state_size
-    assert actor_provider.output_size == config.num_agents
+    assert actor_provider.output_size == BINARY_ACTION_SIZE
     assert actor_provider.degree == config.poly_degree
     assert isinstance(critic_provider, PolynomialFunctionProvider)
     assert critic_provider.input_size == critic_encoder.state_size
@@ -649,7 +648,7 @@ def _fake_step(reward: float) -> SimulationStep:
         timestep=0,
         local_beliefs=(jnp.array([0.0]),),
         next_local_beliefs=(jnp.array([0.0]),),
-        action_vector=(0,),
+        action_matrix=((0,),),
         communication_events=(),
         reward=reward,
         true_positions=jnp.array([0.0]),
@@ -681,7 +680,7 @@ def _uncertain_step(
         timestep=0,
         local_beliefs=local_beliefs,
         next_local_beliefs=next_local_beliefs,
-        action_vector=tuple(0 for _ in local_beliefs),
+        action_matrix=tuple(tuple(0 for _ in local_beliefs) for _ in local_beliefs),
         communication_events=(),
         reward=reward,
         true_positions=np.zeros(len(local_beliefs)),

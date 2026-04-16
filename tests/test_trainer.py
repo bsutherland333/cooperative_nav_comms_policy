@@ -120,7 +120,7 @@ def test_trainer_critic_loss_uses_one_step_td_targets() -> None:
     loss = trainer._critic_loss(
         _episode(
             rewards=(1.0, 1.0),
-            action_vectors=((1, 1), (1, 1)),
+            action_matrices=(((0, 1), (1, 0)), ((0, 1), (1, 0))),
         )
     )
 
@@ -135,7 +135,7 @@ def test_trainer_update_applies_actor_ascent_and_critic_adam_step() -> None:
     update_result = trainer.update_from_episode(
         _episode(
             rewards=(1.0, 1.0),
-            action_vectors=((1, 1), (1, 1)),
+            action_matrices=(((0, 1), (1, 0)), ((0, 1), (1, 0))),
         )
     )
 
@@ -159,7 +159,7 @@ def test_trainer_trains_actor_on_terminal_step() -> None:
     trainer.update_from_episode(
         _episode(
             rewards=(1.0,),
-            action_vectors=((1, 1),),
+            action_matrices=(((0, 1), (1, 0)),),
         )
     )
 
@@ -177,7 +177,7 @@ def test_trainer_critic_uses_one_step_td_targets() -> None:
     trainer.update_from_episode(
         _episode(
             rewards=(1.0, 1.0),
-            action_vectors=((1, 1), (1, 1)),
+            action_matrices=(((0, 1), (1, 0)), ((0, 1), (1, 0))),
         )
     )
 
@@ -202,7 +202,7 @@ def test_trainer_stores_episode_transitions_in_replay_buffer() -> None:
     trainer.update_from_episode(
         _episode(
             rewards=(1.0, 1.0),
-            action_vectors=((1, 1), (1, 1)),
+            action_matrices=(((0, 1), (1, 0)), ((0, 1), (1, 0))),
         )
     )
 
@@ -224,8 +224,8 @@ def test_trainer_combines_old_replay_and_current_trajectory_for_critic_update() 
     replay_buffer.add(
         ReplayTransition(
             global_state=jnp.zeros(4),
-            local_actor_states=jnp.zeros((2, 2)),
-            action_vector=jnp.array([0, 0], dtype=jnp.int32),
+            local_actor_states=jnp.zeros((2, 2, 2)),
+            action_matrix=jnp.array([[0, 0], [0, 0]], dtype=jnp.int32),
             reward=5.0,
             next_global_state=jnp.zeros(4),
             terminal=True,
@@ -241,7 +241,7 @@ def test_trainer_combines_old_replay_and_current_trajectory_for_critic_update() 
     trainer.update_from_episode(
         _episode(
             rewards=(-5.0,),
-            action_vectors=((1, 1),),
+            action_matrices=(((0, 1), (1, 0)),),
         )
     )
 
@@ -262,7 +262,7 @@ def test_trainer_actor_bootstraps_nonterminal_td_advantages() -> None:
     trainer.update_from_episode(
         _episode(
             rewards=(0.0, 0.0),
-            action_vectors=((1, 1), (1, 1)),
+            action_matrices=(((0, 1), (1, 0)), ((0, 1), (1, 0))),
         )
     )
 
@@ -284,7 +284,7 @@ def test_trainer_entropy_bonus_pushes_policy_toward_higher_entropy() -> None:
     trainer.update_from_episode(
         _episode(
             rewards=(0.0, 0.0),
-            action_vectors=((0, 0), (0, 0)),
+            action_matrices=(((0, 0), (0, 0)), ((0, 0), (0, 0))),
         )
     )
 
@@ -306,7 +306,7 @@ def test_trainer_actor_bootstraps_from_next_pre_decision_beliefs() -> None:
     trainer.update_from_episode(
         _episode(
             rewards=(0.0, 0.0),
-            action_vectors=((1, 1), (1, 1)),
+            action_matrices=(((0, 1), (1, 0)), ((0, 1), (1, 0))),
         )
     )
 
@@ -333,7 +333,7 @@ class SumProvider(FunctionProvider):
 
 def _episode(
     rewards: tuple[float, ...],
-    action_vectors: tuple[tuple[int, ...], ...],
+    action_matrices: tuple[tuple[tuple[int, ...], ...], ...],
 ) -> EpisodeResult:
     steps = []
     local_belief_steps = tuple(
@@ -343,15 +343,15 @@ def _episode(
         )
         for step_index in range(len(rewards) + 1)
     )
-    for step_index, (reward, action_vector) in enumerate(
-        zip(rewards, action_vectors, strict=True)
+    for step_index, (reward, action_matrix) in enumerate(
+        zip(rewards, action_matrices, strict=True)
     ):
         steps.append(
             SimulationStep(
                 timestep=step_index + 1,
                 local_beliefs=local_belief_steps[step_index],
                 next_local_beliefs=local_belief_steps[step_index + 1],
-                action_vector=action_vector,
+                action_matrix=action_matrix,
                 communication_events=(),
                 reward=reward,
                 true_positions=jnp.array([0.0, 1.0]),

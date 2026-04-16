@@ -22,7 +22,7 @@ class _EpisodeTrainingArrays:
     global_states: jnp.ndarray
     next_global_states: jnp.ndarray
     local_actor_states: jnp.ndarray
-    action_vectors: jnp.ndarray
+    action_matrices: jnp.ndarray
     rewards: jnp.ndarray
     terminals: jnp.ndarray
     returns: jnp.ndarray
@@ -116,7 +116,7 @@ class Trainer:
             training_arrays.global_states,
             training_arrays.next_global_states,
             training_arrays.local_actor_states,
-            training_arrays.action_vectors,
+            training_arrays.action_matrices,
             training_arrays.rewards,
             training_arrays.terminals,
         )
@@ -198,10 +198,15 @@ class Trainer:
                 tuple(
                     jnp.stack(
                         tuple(
-                            jnp.asarray(
-                                self.actor.actor_encoder.encode_state(
-                                    local_belief=local_belief,
-                                    agent_id=agent_id,
+                            jnp.stack(
+                                tuple(
+                                    _pair_actor_state(
+                                        actor=self.actor,
+                                        local_belief=local_belief,
+                                        agent_id=agent_id,
+                                        partner_id=partner_id,
+                                    )
+                                    for partner_id in range(len(step.local_beliefs))
                                 )
                             )
                             for agent_id, local_belief in enumerate(step.local_beliefs)
@@ -210,8 +215,8 @@ class Trainer:
                     for step in episode.steps
                 )
             ),
-            action_vectors=jnp.asarray(
-                tuple(step.action_vector for step in episode.steps),
+            action_matrices=jnp.asarray(
+                tuple(step.action_matrix for step in episode.steps),
                 dtype=jnp.int32,
             ),
             rewards=jnp.asarray(rewards),
@@ -237,7 +242,7 @@ class Trainer:
             ReplayTransition(
                 global_state=training_arrays.global_states[step_index],
                 local_actor_states=training_arrays.local_actor_states[step_index],
-                action_vector=training_arrays.action_vectors[step_index],
+                action_matrix=training_arrays.action_matrices[step_index],
                 reward=float(training_arrays.rewards[step_index]),
                 next_global_state=training_arrays.next_global_states[step_index],
                 terminal=bool(training_arrays.terminals[step_index]),
@@ -252,7 +257,7 @@ class Trainer:
         global_states: jnp.ndarray,
         next_global_states: jnp.ndarray,
         local_actor_states: jnp.ndarray,
-        action_vectors: jnp.ndarray,
+        action_matrices: jnp.ndarray,
         rewards: jnp.ndarray,
         terminals: jnp.ndarray,
     ) -> jnp.ndarray:
@@ -284,19 +289,24 @@ class Trainer:
             (
                 global_states.shape[0],
                 local_actor_states.shape[1],
+                local_actor_states.shape[2],
                 self.actor.action_size,
             )
         )
         log_probabilities = jax.nn.log_softmax(logits, axis=-1)
         selected_log_probabilities = jnp.take_along_axis(
             log_probabilities,
-            action_vectors[:, :, jnp.newaxis],
-            axis=2,
-        ).squeeze(axis=2)
-        step_log_probability = jnp.sum(selected_log_probabilities, axis=1)
+            action_matrices[:, :, :, jnp.newaxis],
+            axis=3,
+        ).squeeze(axis=3)
+        pair_mask = _ordered_pair_mask(local_actor_states.shape[1])
+        step_log_probability = jnp.sum(
+            selected_log_probabilities * pair_mask,
+            axis=(1, 2),
+        )
         probabilities = jnp.exp(log_probabilities)
-        entropies = -jnp.sum(probabilities * log_probabilities, axis=2)
-        step_entropy = jnp.sum(entropies, axis=1)
+        entropies = -jnp.sum(probabilities * log_probabilities, axis=3)
+        step_entropy = jnp.sum(entropies * pair_mask, axis=(1, 2))
         discounts = self.discount_factor ** jnp.arange(global_states.shape[0])
         return jnp.mean(
             discounts
@@ -358,8 +368,8 @@ def _combine_training_arrays(
             (replay_batch.local_actor_states, training_arrays.local_actor_states),
             axis=0,
         ),
-        action_vectors=jnp.concatenate(
-            (replay_batch.action_vectors, training_arrays.action_vectors),
+        action_matrices=jnp.concatenate(
+            (replay_batch.action_matrices, training_arrays.action_matrices),
             axis=0,
         ),
         rewards=jnp.concatenate((replay_batch.rewards, training_arrays.rewards), axis=0),
@@ -372,6 +382,27 @@ def _combine_training_arrays(
             axis=0,
         ),
     )
+
+
+def _pair_actor_state(
+    actor: Actor,
+    local_belief: Any,
+    agent_id: int,
+    partner_id: int,
+) -> jnp.ndarray:
+    if agent_id == partner_id:
+        return jnp.zeros(actor.state_size)
+    return jnp.asarray(
+        actor.actor_encoder.encode_state(
+            local_belief=local_belief,
+            agent_id=agent_id,
+            partner_id=partner_id,
+        )
+    )
+
+
+def _ordered_pair_mask(num_agents: int) -> jnp.ndarray:
+    return 1.0 - jnp.eye(num_agents)
 
 
 def _discounted_returns(

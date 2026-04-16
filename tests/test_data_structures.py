@@ -10,13 +10,27 @@ from simulation.data_structures import (
 )
 
 
-def test_simulation_step_requires_action_per_agent() -> None:
-    with pytest.raises(ValueError, match="one action per local belief"):
+def test_simulation_step_requires_action_row_per_agent() -> None:
+    with pytest.raises(ValueError, match="one row per local belief"):
         SimulationStep(
             timestep=1,
             local_beliefs=("agent-0", "agent-1"),
             next_local_beliefs=("agent-0-next", "agent-1-next"),
-            action_vector=(0,),
+            action_matrix=((0, 1),),
+            communication_events=(),
+            reward=0.0,
+            true_positions=("true-0", "true-1"),
+            extra={},
+        )
+
+
+def test_simulation_step_requires_action_column_per_agent() -> None:
+    with pytest.raises(ValueError, match="one column per local belief"):
+        SimulationStep(
+            timestep=1,
+            local_beliefs=("agent-0", "agent-1"),
+            next_local_beliefs=("agent-0-next", "agent-1-next"),
+            action_matrix=((0,), (1,)),
             communication_events=(),
             reward=0.0,
             true_positions=("true-0", "true-1"),
@@ -30,7 +44,7 @@ def test_simulation_step_requires_successor_belief_per_agent() -> None:
             timestep=1,
             local_beliefs=("agent-0", "agent-1"),
             next_local_beliefs=("agent-0-next",),
-            action_vector=(0, 0),
+            action_matrix=((0, 0), (0, 0)),
             communication_events=(),
             reward=0.0,
             true_positions=("true-0", "true-1"),
@@ -65,7 +79,7 @@ def test_episode_result_from_steps_stores_simulation_outputs() -> None:
         timestep=3,
         local_beliefs=("agent-0", "agent-1"),
         next_local_beliefs=("agent-0-next", "agent-1-next"),
-        action_vector=(1, 0),
+        action_matrix=((0, 1), (0, 0)),
         communication_events=((0, 1),),
         reward=-1.25,
         true_positions=("true-0", "true-1"),
@@ -84,7 +98,7 @@ def test_simulation_step_requires_nonnegative_timestep() -> None:
             timestep=-1,
             local_beliefs=("agent-0",),
             next_local_beliefs=("agent-0-next",),
-            action_vector=(0,),
+            action_matrix=((0,),),
             communication_events=(),
             reward=0.0,
             true_positions=("true-0",),
@@ -98,7 +112,7 @@ def test_simulation_step_requires_finite_reward() -> None:
             timestep=1,
             local_beliefs=("agent-0",),
             next_local_beliefs=("agent-0-next",),
-            action_vector=(0,),
+            action_matrix=((0,),),
             communication_events=(),
             reward=float("nan"),
             true_positions=("true-0",),

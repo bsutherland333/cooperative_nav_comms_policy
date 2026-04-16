@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from policy.actions import selection_to_partner
+from policy.actions import NO_COMMUNICATION, is_communication
 from policy.actor import Actor, ActorDecision
 from simulation.base import Simulation
 from simulation.data_structures import EpisodeResult, LocalBelief, SimulationStep
@@ -81,7 +81,8 @@ class LineSimulation(Simulation):
                 local_beliefs=local_beliefs,
                 exploration=exploration,
             )
-            communication_events = self._communication_events(decisions)
+            action_matrix = _action_matrix(decisions)
+            communication_events = self._communication_events(action_matrix)
             for agent_id, partner_id in communication_events:
                 first_estimator = estimators[agent_id]
                 second_estimator = estimators[partner_id]
@@ -131,7 +132,7 @@ class LineSimulation(Simulation):
                     timestep=timestep,
                     local_beliefs=local_beliefs,
                     next_local_beliefs=next_local_beliefs,
-                    action_vector=tuple(decision.selection for decision in decisions),
+                    action_matrix=action_matrix,
                     communication_events=communication_events,
                     reward=self.reward_function(
                         current_local_beliefs=local_beliefs,
@@ -171,35 +172,43 @@ class LineSimulation(Simulation):
         self,
         local_beliefs: tuple[LocalBelief, ...],
         exploration: bool,
-    ) -> tuple[ActorDecision, ...]:
-        """Sample one communication action per local estimator."""
-        decisions: list[ActorDecision] = []
+    ) -> tuple[tuple[ActorDecision, ...], ...]:
+        """Sample one binary action per ordered pair from the current beliefs."""
+        decisions: list[tuple[ActorDecision, ...]] = []
         for agent_id, local_belief in enumerate(local_beliefs):
-            decisions.append(
-                self.actor.get_action(
-                    local_belief=local_belief,
-                    agent_id=agent_id,
-                    exploration=exploration,
+            agent_decisions: list[ActorDecision] = []
+            for partner_id in range(self.num_agents):
+                if partner_id == agent_id:
+                    agent_decisions.append(
+                        ActorDecision(
+                            selection=NO_COMMUNICATION,
+                            probabilities=np.asarray([1.0, 0.0]),
+                        )
+                    )
+                    continue
+                agent_decisions.append(
+                    self.actor.get_action(
+                        local_belief=local_belief,
+                        agent_id=agent_id,
+                        partner_id=partner_id,
+                        exploration=exploration,
+                    )
                 )
-            )
+            decisions.append(tuple(agent_decisions))
         return tuple(decisions)
 
     def _communication_events(
         self,
-        decisions: tuple[ActorDecision, ...],
+        action_matrix: tuple[tuple[int, ...], ...],
     ) -> tuple[tuple[int, int], ...]:
-        """Convert directed requests to a shuffled unique set of unordered pairs."""
-        pairs = set()
-        for agent_id, decision in enumerate(decisions):
-            partner_id = selection_to_partner(
-                selection=decision.selection,
-                agent_id=agent_id,
-                num_agents=self.num_agents,
-            )
-            if partner_id is not None:
-                pairs.add(tuple(sorted((agent_id, partner_id))))
-
-        events = list(pairs)
+        """Convert directed binary requests to unique unordered events."""
+        events = [
+            (agent_id, partner_id)
+            for agent_id in range(self.num_agents)
+            for partner_id in range(agent_id + 1, self.num_agents)
+            if is_communication(action_matrix[agent_id][partner_id])
+            or is_communication(action_matrix[partner_id][agent_id])
+        ]
         self._rng.shuffle(events)
         return tuple(events)
 
@@ -217,6 +226,15 @@ def _local_beliefs(
             last_communication_timesteps=last_communication_timesteps[agent_id],
         )
         for agent_id, estimator in enumerate(estimators)
+    )
+
+
+def _action_matrix(
+    decisions: tuple[tuple[ActorDecision, ...], ...],
+) -> tuple[tuple[int, ...], ...]:
+    return tuple(
+        tuple(decision.selection for decision in agent_decisions)
+        for agent_decisions in decisions
     )
 
 

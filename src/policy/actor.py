@@ -32,8 +32,8 @@ class Actor:
         """Validate and store the actor's function provider."""
         if state_size <= 0:
             raise ValueError("state_size must be positive.")
-        if action_size <= 1:
-            raise ValueError("action_size must include no-op and at least one partner.")
+        if action_size != 2:
+            raise ValueError("Binary communication actor action_size must be 2.")
         if function_provider.input_size != state_size:
             raise ValueError("Actor provider input_size must match state_size.")
         if function_provider.output_size != action_size:
@@ -51,6 +51,7 @@ class Actor:
         self,
         local_belief: Any,
         agent_id: int,
+        partner_id: int,
         exploration: bool,
     ) -> ActorDecision:
         """Choose an action by sampling during training or argmax during evaluation."""
@@ -58,6 +59,7 @@ class Actor:
             self.actor_encoder.encode_state(
                 local_belief=local_belief,
                 agent_id=agent_id,
+                partner_id=partner_id,
             )
         )
         if state.shape != (self.state_size,):

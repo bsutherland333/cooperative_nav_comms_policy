@@ -1,28 +1,26 @@
-"""Tests for communication action index mapping."""
+"""Tests for binary communication actions."""
 
 import pytest
 
-from policy.actions import NO_COMMUNICATION, partner_to_selection, selection_to_partner
+from policy.actions import (
+    BINARY_ACTION_SIZE,
+    COMMUNICATE,
+    NO_COMMUNICATION,
+    is_communication,
+)
 
 
-def test_selection_maps_to_other_agents_in_sorted_order() -> None:
-    assert selection_to_partner(NO_COMMUNICATION, agent_id=1, num_agents=4) is None
-    assert selection_to_partner(selection=1, agent_id=1, num_agents=4) == 0
-    assert selection_to_partner(selection=2, agent_id=1, num_agents=4) == 2
-    assert selection_to_partner(selection=3, agent_id=1, num_agents=4) == 3
+def test_binary_action_constants() -> None:
+    assert NO_COMMUNICATION == 0
+    assert COMMUNICATE == 1
+    assert BINARY_ACTION_SIZE == 2
 
 
-def test_partner_maps_back_to_local_selection() -> None:
-    assert partner_to_selection(partner_id=0, agent_id=1, num_agents=4) == 1
-    assert partner_to_selection(partner_id=2, agent_id=1, num_agents=4) == 2
-    assert partner_to_selection(partner_id=3, agent_id=1, num_agents=4) == 3
+def test_is_communication_identifies_positive_selection() -> None:
+    assert not is_communication(NO_COMMUNICATION)
+    assert is_communication(COMMUNICATE)
 
 
-def test_self_partner_is_invalid() -> None:
-    with pytest.raises(ValueError, match="cannot select itself"):
-        partner_to_selection(partner_id=1, agent_id=1, num_agents=4)
-
-
-def test_selection_must_be_valid_action_index() -> None:
-    with pytest.raises(ValueError, match=r"\[0, num_agents\)"):
-        selection_to_partner(selection=4, agent_id=1, num_agents=4)
+def test_is_communication_requires_binary_selection() -> None:
+    with pytest.raises(ValueError, match="0 or 1"):
+        is_communication(2)

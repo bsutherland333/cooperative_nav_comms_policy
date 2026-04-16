@@ -1,9 +1,10 @@
 """Policy-layer interfaces for actors, critics, actions, and function providers."""
 
 from policy.actions import (
+    BINARY_ACTION_SIZE,
+    COMMUNICATE,
     NO_COMMUNICATION,
-    partner_to_selection,
-    selection_to_partner,
+    is_communication,
 )
 from policy.actor import Actor, ActorDecision
 from policy.critic import Critic
@@ -13,9 +14,10 @@ __all__ = [
     "Actor",
     "ActorDecision",
     "Critic",
+    "BINARY_ACTION_SIZE",
+    "COMMUNICATE",
     "FunctionProvider",
     "NO_COMMUNICATION",
     "PolynomialFunctionProvider",
-    "partner_to_selection",
-    "selection_to_partner",
+    "is_communication",
 ]

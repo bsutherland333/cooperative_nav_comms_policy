@@ -76,23 +76,45 @@ def test_sim_main_builds_line_simulation() -> None:
     assert simulation.reward_function.communication_cost == 0.3
 
 
-def test_fake_actor_communicates_every_50_steps() -> None:
+def test_fake_actor_communicates_every_20_steps() -> None:
     config = sim_main.StandaloneSimConfig(
         simulator_name="line",
         reward_method=RewardMethod.TRACE,
         state_encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
         num_agents=2,
-        num_steps=50,
+        num_steps=20,
         communication_cost=0.3,
     )
     actor = sim_main.build_fake_actor(config)
 
-    for _ in range(49):
-        assert actor.get_action(None, agent_id=0, exploration=True).selection == 0
-        assert actor.get_action(None, agent_id=1, exploration=True).selection == 0
+    for _ in range(19):
+        assert (
+            actor.get_action(
+                None,
+                agent_id=0,
+                partner_id=1,
+                exploration=True,
+            ).selection
+            == 0
+        )
+        assert (
+            actor.get_action(
+                None,
+                agent_id=1,
+                partner_id=0,
+                exploration=True,
+            ).selection
+            == 0
+        )
 
-    assert actor.get_action(None, agent_id=0, exploration=True).selection == 1
-    assert actor.get_action(None, agent_id=1, exploration=True).selection == 1
+    assert (
+        actor.get_action(None, agent_id=0, partner_id=1, exploration=True).selection
+        == 1
+    )
+    assert (
+        actor.get_action(None, agent_id=1, partner_id=0, exploration=True).selection
+        == 1
+    )
 
 
 def test_sim_main_fails_cleanly_for_unknown_simulator(capsys: object) -> None:

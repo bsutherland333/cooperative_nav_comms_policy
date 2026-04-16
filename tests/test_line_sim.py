@@ -11,9 +11,9 @@ from simulation.state_encoding import ActorEncoder, StateEncodingMethod
 from tests.fakes import FixedOutputProvider
 
 
-def _actor(logits: np.ndarray) -> Actor:
+def _actor(logits: np.ndarray, num_agents: int) -> Actor:
     actor_encoder = ActorEncoder(
-        num_agents=int(logits.shape[0]),
+        num_agents=num_agents,
         vehicle_state_size=1,
         encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
     )
@@ -23,7 +23,7 @@ def _actor(logits: np.ndarray) -> Actor:
     )
     return Actor(
         state_size=actor_encoder.state_size,
-        action_size=int(logits.shape[0]),
+        action_size=2,
         function_provider=provider,
         actor_encoder=actor_encoder,
     )
@@ -51,7 +51,7 @@ def _next_communication_ages(
 
 def test_line_sim_uses_noisy_truth_and_nominal_priors() -> None:
     sim = LineSimulation(
-        actor=_actor(np.array([5.0, 0.0, 0.0])),
+        actor=_actor(np.array([5.0, 0.0]), num_agents=3),
         num_agents=3,
         num_steps=1,
         reward_function=Reward(
@@ -103,8 +103,8 @@ def test_line_sim_uses_noisy_truth_and_nominal_priors() -> None:
 
 def test_line_sim_merges_duplicate_communication_requests() -> None:
     sim = LineSimulation(
-        actor=_actor(np.array([0.0, 10.0, 0.0])),
-        num_agents=3,
+        actor=_actor(np.array([0.0, 10.0]), num_agents=2),
+        num_agents=2,
         num_steps=1,
         reward_function=Reward(
             reward_method=RewardMethod.TRACE,
@@ -114,16 +114,15 @@ def test_line_sim_merges_duplicate_communication_requests() -> None:
 
     episode = sim.run(exploration=False)
 
-    assert episode.steps[0].action_vector == (1, 1, 1)
-    assert sorted(episode.steps[0].communication_events) == [(0, 1), (0, 2)]
-    assert len(episode.steps[0].communication_events) == 2
-    assert episode.steps[0].reward < -1_000.0
-    assert episode.steps[0].reward > -2_500.0
+    assert episode.steps[0].action_matrix == ((0, 1), (1, 0))
+    assert episode.steps[0].communication_events == ((0, 1),)
+    assert episode.steps[0].reward < -999.0
+    assert episode.steps[0].reward > -1_000.0
 
 
 def test_line_sim_records_time_since_last_communication() -> None:
     no_communication_sim = LineSimulation(
-        actor=_actor(np.array([10.0, 0.0])),
+        actor=_actor(np.array([10.0, 0.0]), num_agents=2),
         num_agents=2,
         num_steps=2,
         reward_function=Reward(
@@ -148,7 +147,7 @@ def test_line_sim_records_time_since_last_communication() -> None:
     )
 
     communication_sim = LineSimulation(
-        actor=_actor(np.array([0.0, 10.0])),
+        actor=_actor(np.array([0.0, 10.0]), num_agents=2),
         num_agents=2,
         num_steps=1,
         reward_function=Reward(
@@ -201,6 +200,7 @@ def test_line_sim_records_the_decision_time_beliefs_used_by_actor() -> None:
     expected_last_actor_input = actor_encoder.encode_state(
         local_belief=episode.steps[0].local_beliefs[1],
         agent_id=1,
+        partner_id=0,
     )
     np.testing.assert_allclose(
         np.asarray(provider.last_inputs),
