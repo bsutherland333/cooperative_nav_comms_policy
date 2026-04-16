@@ -23,6 +23,8 @@ from simulation.state_encoding import (
 )
 from simulation.line_sim.plotter import LinePlotter
 from simulation.line_sim.sim import LineSimulation
+from simulation.plane_sim.plotter import PlanePlotter
+from simulation.plane_sim.sim import PlaneSimulation
 from training.replay import ReplayBuffer, ReplayConfig
 from training.trainer import SimulationType, Trainer
 
@@ -117,22 +119,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 def run_training(config: RunConfig) -> None:
     """Run the intended training loop."""
-    simulation_type = build_simulation_type(config)
-    actor = build_actor(config)
-    critic = build_critic(config)
-    replay_config = build_replay_config(config)
-
-    trainer = Trainer(
-        actor=actor,
-        critic=critic,
-        simulation_type=simulation_type,
-        actor_learning_rate=config.actor_learning_rate,
-        critic_learning_rate=config.critic_learning_rate,
-        discount_factor=config.discount_factor,
-        entropy_coefficient=config.entropy_coefficient,
-        replay_config=replay_config,
-        replay_buffer=ReplayBuffer(buffer_size=replay_config.buffer_size),
-    )
+    trainer = build_trainer(config)
+    actor = trainer.actor
+    simulation_type = trainer.simulation_type
     training_iterations: list[int] = []
     reward_sums: list[float] = []
     average_discounted_returns: list[float] = []
@@ -360,6 +349,38 @@ def build_replay_config(config: RunConfig) -> ReplayConfig:
     )
 
 
+def build_trainer(config: RunConfig) -> Trainer:
+    """Construct the actor-critic trainer and its simulator dependencies."""
+    reward_function = build_reward_function(config)
+    simulation_type = build_simulation_type(
+        config=config,
+        reward_function=reward_function,
+    )
+    actor = build_actor(config)
+    critic = build_critic(config)
+    replay_config = build_replay_config(config)
+
+    return Trainer(
+        actor=actor,
+        critic=critic,
+        simulation_type=simulation_type,
+        actor_learning_rate=config.actor_learning_rate,
+        critic_learning_rate=config.critic_learning_rate,
+        discount_factor=config.discount_factor,
+        entropy_coefficient=config.entropy_coefficient,
+        replay_config=replay_config,
+        replay_buffer=ReplayBuffer(buffer_size=replay_config.buffer_size),
+    )
+
+
+def build_reward_function(config: RunConfig) -> Reward:
+    """Construct the scalar reward function for simulator transitions."""
+    return Reward(
+        reward_method=config.reward_method,
+        communication_cost=config.communication_cost,
+    )
+
+
 def build_function_provider(
     config: RunConfig,
     role: str,
@@ -399,18 +420,19 @@ def _encoder_state_size(config: RunConfig, role: str) -> int:
 def _vehicle_state_size(config: RunConfig) -> int:
     if config.simulator_name == "line":
         return LineSimulation.vehicle_state_size
+    if config.simulator_name == "plane":
+        return PlaneSimulation.vehicle_state_size
     raise NotImplementedError(
         f"No vehicle_state_size is registered for simulator '{config.simulator_name}'."
     )
 
 
-def build_simulation_type(config: RunConfig) -> SimulationType:
+def build_simulation_type(
+    config: RunConfig,
+    reward_function: Reward,
+) -> SimulationType:
     """Select the concrete simulator class."""
     if config.simulator_name == "line":
-        reward_function = Reward(
-            reward_method=config.reward_method,
-            communication_cost=config.communication_cost,
-        )
 
         class ConfiguredLineSimulation(LineSimulation):
             """Line simulation bound to the requested runtime dimensions."""
@@ -425,6 +447,21 @@ def build_simulation_type(config: RunConfig) -> SimulationType:
 
         return ConfiguredLineSimulation
 
+    if config.simulator_name == "plane":
+
+        class ConfiguredPlaneSimulation(PlaneSimulation):
+            """Plane simulation bound to the requested runtime dimensions."""
+
+            def __init__(self, actor: Actor) -> None:
+                super().__init__(
+                    actor=actor,
+                    num_agents=config.num_agents,
+                    num_steps=config.num_steps,
+                    reward_function=reward_function,
+                )
+
+        return ConfiguredPlaneSimulation
+
     raise NotImplementedError(
         f"No simulator is registered for '{config.simulator_name}'."
     )
@@ -434,6 +471,8 @@ def build_plotter(config: RunConfig) -> Plotter:
     """Create the concrete plotter for the selected simulator."""
     if config.simulator_name == "line":
         return LinePlotter()
+    if config.simulator_name == "plane":
+        return PlanePlotter()
 
     raise NotImplementedError(
         f"No plotter is registered for simulator '{config.simulator_name}'."

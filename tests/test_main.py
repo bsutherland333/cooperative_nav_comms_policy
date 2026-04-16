@@ -13,6 +13,8 @@ from simulation.line_sim.plotter import LinePlotter
 from simulation.line_sim.sim import LineSimulation
 from simulation.data_structures import EpisodeResult, LocalBelief, SimulationStep
 from simulation.rewards import Reward, RewardMethod
+from simulation.plane_sim.plotter import PlanePlotter
+from simulation.plane_sim.sim import PlaneSimulation
 from simulation.state_encoding import (
     ActorEncoder,
     CriticEncoder,
@@ -34,6 +36,8 @@ class RecordingTrainer:
 
     def __init__(self, **kwargs: Any) -> None:
         self.kwargs = kwargs
+        self.actor = kwargs["actor"]
+        self.simulation_type = kwargs["simulation_type"]
         self.training_episode_count = 0
         self.update_count = 0
         self.update_episodes: list[EpisodeResult] = []
@@ -122,7 +126,11 @@ def test_run_training_orchestrates_training_and_status_reporting(
         "build_function_provider",
         _fake_function_provider,
     )
-    monkeypatch.setattr(main, "build_simulation_type", lambda config: FakeSimulation)
+    monkeypatch.setattr(
+        main,
+        "build_simulation_type",
+        lambda config, reward_function: FakeSimulation,
+    )
     monkeypatch.setattr(main, "build_plotter", lambda config: FakePlotter())
     monkeypatch.setattr(main, "Trainer", RecordingTrainer)
     monkeypatch.setattr(main.plt, "show", lambda: show_calls.append(True))
@@ -229,7 +237,11 @@ def test_run_training_plots_final_evaluation_after_keyboard_interrupt(
         "build_function_provider",
         _fake_function_provider,
     )
-    monkeypatch.setattr(main, "build_simulation_type", lambda config: FakeSimulation)
+    monkeypatch.setattr(
+        main,
+        "build_simulation_type",
+        lambda config, reward_function: FakeSimulation,
+    )
     monkeypatch.setattr(main, "build_plotter", lambda config: FakePlotter())
     monkeypatch.setattr(main, "Trainer", InterruptingTrainer)
     monkeypatch.setattr(main.plt, "show", lambda: show_calls.append(True))
@@ -290,7 +302,11 @@ def test_run_training_plots_intermediate_evaluations_without_blocking(
         "build_function_provider",
         _fake_function_provider,
     )
-    monkeypatch.setattr(main, "build_simulation_type", lambda config: FakeSimulation)
+    monkeypatch.setattr(
+        main,
+        "build_simulation_type",
+        lambda config, reward_function: FakeSimulation,
+    )
     monkeypatch.setattr(main, "build_plotter", lambda config: FakePlotter())
     monkeypatch.setattr(main, "Trainer", RecordingTrainer)
     monkeypatch.setattr(
@@ -550,18 +566,69 @@ def test_line_simulator_registration_uses_configured_dimensions(
         _line_function_provider,
     )
     actor = main.build_actor(config)
+    reward_function = main.build_reward_function(config)
 
-    simulation_type = main.build_simulation_type(config)
+    simulation_type = main.build_simulation_type(
+        config=config,
+        reward_function=reward_function,
+    )
     simulation = simulation_type(actor)
 
     assert isinstance(actor.actor_encoder, ActorEncoder)
     assert isinstance(simulation, LineSimulation)
-    assert isinstance(simulation.reward_function, Reward)
+    assert simulation.reward_function is reward_function
     assert simulation.reward_function.reward_method == RewardMethod.TRACE
     assert simulation.num_agents == 2
     assert simulation.num_steps == 4
     assert simulation.reward_function.communication_cost == 0.3
     assert isinstance(main.build_plotter(config), LinePlotter)
+
+
+def test_plane_simulator_registration_uses_configured_dimensions(
+    monkeypatch: Any,
+) -> None:
+    config = main.RunConfig(
+        simulator_name="plane",
+        function_type="fake_function",
+        reward_method=RewardMethod.TRACE,
+        state_encoding_method=StateEncodingMethod.MEAN_DIAGONAL,
+        num_agents=2,
+        num_training_iterations=1,
+        num_steps=4,
+        poly_degree=2,
+        actor_learning_rate=0.1,
+        critic_learning_rate=0.2,
+        discount_factor=0.9,
+        entropy_coefficient=0.0,
+        communication_cost=0.3,
+        replay_buffer_size=13,
+        replay_batch_size=4,
+        replay_warmup_size=6,
+        eval_plot_interval=None,
+    )
+    monkeypatch.setattr(
+        main,
+        "build_function_provider",
+        _plane_function_provider,
+    )
+    actor = main.build_actor(config)
+    reward_function = main.build_reward_function(config)
+
+    simulation_type = main.build_simulation_type(
+        config=config,
+        reward_function=reward_function,
+    )
+    simulation = simulation_type(actor)
+
+    assert isinstance(actor.actor_encoder, ActorEncoder)
+    assert actor.actor_encoder.vehicle_state_size == PlaneSimulation.vehicle_state_size
+    assert isinstance(simulation, PlaneSimulation)
+    assert simulation.reward_function is reward_function
+    assert simulation.reward_function.reward_method == RewardMethod.TRACE
+    assert simulation.num_agents == 2
+    assert simulation.num_steps == 4
+    assert simulation.reward_function.communication_cost == 0.3
+    assert isinstance(main.build_plotter(config), PlanePlotter)
 
 
 def test_polynomial_function_provider_registration_uses_encoder_dimensions() -> None:
@@ -701,6 +768,34 @@ def _line_function_provider(
     critic_encoder = CriticEncoder(
         num_agents=config.num_agents,
         vehicle_state_size=LineSimulation.vehicle_state_size,
+        encoding_method=config.state_encoding_method,
+    )
+    if role == "actor":
+        input_size = actor_encoder.state_size
+    elif role == "critic":
+        input_size = critic_encoder.state_size
+    else:
+        raise ValueError(f"Unknown provider role: {role}")
+
+    return FixedOutputProvider(
+        input_size=input_size,
+        output=jnp.zeros(output_size),
+    )
+
+
+def _plane_function_provider(
+    config: main.RunConfig,
+    role: str,
+    output_size: int,
+) -> FixedOutputProvider:
+    actor_encoder = ActorEncoder(
+        num_agents=config.num_agents,
+        vehicle_state_size=PlaneSimulation.vehicle_state_size,
+        encoding_method=config.state_encoding_method,
+    )
+    critic_encoder = CriticEncoder(
+        num_agents=config.num_agents,
+        vehicle_state_size=PlaneSimulation.vehicle_state_size,
         encoding_method=config.state_encoding_method,
     )
     if role == "actor":
